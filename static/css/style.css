@@ -1,0 +1,118 @@
+:root{
+  --text-background-color: color-mix(in srgb, var(--background-50), transparent 15%);
+  --blur-size: 7.5px;
+}
+
+*{
+  scrollbar-color: #454a4d #202324;
+}
+
+html{
+  color: var(--text-900);
+}
+
+body{
+  background-color: transparent;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+#header {
+  top: 0px;
+  width: 100%;
+  height: 6vh;
+  margin-bottom: 3%;
+/*  background-color: red;*/
+/*  border: 2px solid red;*/
+}
+
+#header .icon{
+  float: right;
+}
+
+#header #scene_list{
+  height: 100%;
+  left: 0px;
+  display: grid;
+  grid-template-columns: repeat(100, auto);
+  grid-gap: 0.5%;
+  padding-left: 0.2%;
+/*  border: 2px solid green; */
+}
+
+.current{
+  border: 2px solid var(--primary-700) !important;
+}
+
+.scene_button{
+  width: 100%;
+  font-size: 16px;
+  margin-top: 0.5vh;
+  margin-bottom: 0.5vh;
+  cursor: pointer;
+/*  padding: 10px 20px;*/
+  border: 1px solid var(--primary-400);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--background-900);
+  backdrop-filter: blur(var(--blur-size));
+  -webkit-backdrop-filter: blur(var(--blur-size));
+}
+
+.icon{
+  width: 25px;
+  height: 25px;
+  font-size: 10px;
+}
+
+a {
+  color: var(--accent-500);
+  text-decoration: None;
+}
+
+#description {
+  --side-margin: 20%;
+  margin-left:  var(--side-margin);
+  margin-right: var(--side-margin) ; 
+  font-size: 1.5em;
+  color: var(--primary-500);
+
+  backdrop-filter: blur(var(--blur-size));
+  -webkit-backdrop-filter: blur(var(--blur-size));
+  background-color: var(--text-background-color);
+  text-align: left;
+}
+
+/* https://stackoverflow.com/a/62221520 ily */
+#global {
+  /* The power of flexboxes! */
+  display: flex;
+  display: -webkit-flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#content {
+  /* Key part: Eat the remaining space! */
+  flex-grow: 1;
+}
+
+footer {
+  margin-top: 5%;
+  text-align: right;
+  background-color: transparent;
+}
+
+
+.warning{
+  color: black;
+  width: 100%;
+  height: 50px;
+/*  align: center;*/
+  line-height: 50px;
+  text-align: center;
+  background: yellow;
+}
+

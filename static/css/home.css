@@ -1,0 +1,23 @@
+#skill_list{
+    width: 60vw;
+    margin-left: 20vw;
+/*    border: 1px solid green;*/
+}
+
+#skill_list ul{
+    list-style: none;
+    padding-left: 0px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-gap: 20px;
+
+}
+
+.skill_card{
+/*    border: 2px solid red;*/
+}
+
+.skill_logo{
+    width: 100px;
+    height: auto;
+}
