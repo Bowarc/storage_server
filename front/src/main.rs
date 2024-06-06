@@ -3,7 +3,6 @@ use js_sys::Date;
 use wasm_bindgen::prelude::wasm_bindgen;
 use yew::{html, Component, Context, Html};
 
-use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -22,6 +21,7 @@ pub enum Msg {
     FetchDashboard,
     SetDashboardFetchState(FetchState<DashboardData>),
 }
+
 #[derive(Debug)]
 pub struct DashboardData {
     cache_list: Vec<shared::data::CacheEntry>,
@@ -49,7 +49,7 @@ async fn test_upload() -> Result<(), FetchError> {
         "{\"metadata\": {\"username\": \"Hugo\",\"file_ext\": \"png\"},\"file\": \"Empty\"}",
     )));
 
-    let request = Request::new_with_str_and_init("http://192.168.1.24:8001/upload", &init)?;
+    let request = Request::new_with_str_and_init("/upload", &init)?;
 
     request
         .headers()

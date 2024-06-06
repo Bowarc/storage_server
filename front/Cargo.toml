@@ -10,14 +10,33 @@ name = "front"
 path = "src/main.rs"
 
 [dependencies]
-gloo = "0.11.0"
-js-sys = "0.3.66"
-yew = { version = "0.21.0", features = ["csr"] }
-wasm-bindgen = { version = "0.2.89", features = ["serde_json"] }
-serde = { version = "1.0.194", features = ["derive"] }
-wasm-bindgen-futures = "0.4.39"
-web-sys = "0.3.66"
-shared = { path = "../shared"}
+shared = { path ="../shared" }
+random = { git = "https://github.com/bowarc/Crates", package = "random" }
+time = { git = "https://github.com/bowarc/Crates", package = "time" }
+maths = { git = "https://github.com/bowarc/Crates", package = "maths" }
+gloo = "0.10.0" # Yew depends on this version
+js-sys = "0.3.68"
+yew = { version = "0.21.0", features = ["csr"] } # csr allows access to yew::Renderer
+wasm-bindgen = { version = "0.2.92"}
+wasm-bindgen-futures = "0.4.41"
+wasm-timer = "0.2.5"
 serde_json = "1.0.111"
-gloo-utils = { version = "0.1", features = ["serde"] }
-mem = { git = "https://github.com/bowarc/Crates" , package = "mem"}
+serde = { version = "1.0.194", features = ["derive"] }
+futures = "0.3.30"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+# wasm-bindgen-futures = "0.4.39"
+# serde_json = "1.0.111"
+# gloo-utils = { version = "0.1", features = ["serde"] }
+# mem = { git = "https://github.com/bowarc/Crates" , package = "mem"}
+
+
+[dependencies.web-sys]
+version = "0.3.68"
+features = [
+  'HtmlCanvasElement',
+  'WebGlBuffer',
+  'WebGlProgram',
+  'WebGlRenderingContext',
+  'WebGlShader',
+  'WebGlUniformLocation',
+]

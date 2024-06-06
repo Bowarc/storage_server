@@ -27,7 +27,8 @@ async fn main() {
         message = "Program start"
     );
 
-    let cache = rocket::tokio::sync::RwLock::new(cache::Cache::new().expect("Could not load cache"));
+    let cache =
+        rocket::tokio::sync::RwLock::new(cache::Cache::new().expect("Could not load cache"));
 
     let rocket = rocket::build()
         .manage(cache)
@@ -39,14 +40,60 @@ async fn main() {
         .mount(
             "/",
             rocket::routes![
+                // routes::root,
+                // routes::style,
+                // routes::front,
+                // routes::wasm,
+                // routes::upload,
+                // routes::download,
+                // routes::cache_list,
+                // routes::upload_option,
                 routes::root,
                 routes::style,
                 routes::front,
                 routes::wasm,
-                routes::upload,
-                routes::download,
-                routes::cache_list,
-                routes::upload_option
+                routes::contactCSS,
+                routes::gitcardCSS,
+                routes::homeCSS,
+                routes::presentationCSS,
+                routes::styleCSS,
+                routes::themeCSS,
+                routes::wormsCSS,
+                routes::frontJS,
+                routes::front_bgWASM,
+                routes::indexHTML,
+                routes::liveJS,
+                routes::customCSS,
+                routes::gruvboxdarkCSS,
+                routes::prism_rust_minJS,
+                routes::prismCSS,
+                routes::prism_minJS,
+                routes::synthwave84CSS,
+                routes::xonokaiCSS,
+                routes::zoomCSS,
+                routes::zoomJS,
+                routes::bashWEBP,
+                routes::cWEBP,
+                routes::cppWEBP,
+                routes::csharpWEBP,
+                routes::cssWEBP,
+                routes::gitWEBP,
+                routes::githubWEBP,
+                routes::htmlWEBP,
+                routes::javaWEBP,
+                routes::javascriptWEBP,
+                routes::kotlinWEBP,
+                routes::phpWEBP,
+                routes::pwshWEBP,
+                routes::pwsh2WEBP,
+                routes::pythonWEBP,
+                routes::rustWEBP,
+                routes::sshWEBP,
+                routes::storage_server_drawioPNG,
+                routes::storage_server_drawio100pxPNG,
+                routes::storage_server_drawio200pxPNG,
+                routes::zigWEBP,
+                routes::upload_option,
             ],
         )
         .ignite()
@@ -57,7 +104,13 @@ async fn main() {
 
     // Safety:
     //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
-    unsafe { JSON_REQ_LIMIT = rocket.config().limits.get("json").expect("Failled to read the normal and default config") }
+    unsafe {
+        JSON_REQ_LIMIT = rocket
+            .config()
+            .limits
+            .get("json")
+            .expect("Failled to read the normal and default config")
+    }
 
     rocket.launch().await.unwrap();
 }

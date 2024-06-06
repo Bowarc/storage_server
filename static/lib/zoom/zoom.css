@@ -1,0 +1,14 @@
+.zoomable_element {
+  /* (A) DIMENSIONS */
+/*  width: 70vw;*/
+  height: 40vh;
+  width: auto;
+ 
+  /* (B) BACKGROUND IMAGE */
+/*  background: url(var(--image_path));*/
+  background-position: center;
+  background-size: cover;
+  background-color: var(--text-background-color);
+
+/*  border: 2px solid red;*/
+}
