@@ -136,7 +136,7 @@ impl Cache {
                     "[{id}] Cache was successfully compresed ({} -> {}) in {}",
                     rocket::data::ByteUnit::Byte(original_data_length as u64),
                     rocket::data::ByteUnit::Byte(compressed_data_length as u64),
-                    time::format(exec_time)
+                    time::format(exec_time, 2)
                 );
             })
         })

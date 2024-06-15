@@ -13,9 +13,7 @@ impl yew::Component for Download {
 
     fn view(&self, _ctx: &yew::prelude::Context<Self>) -> yew::prelude::Html {
         html! {<>
-            <p>
             { "Download page" } 
-            </p>
         </>}
     }
 }

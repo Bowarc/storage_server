@@ -1,0 +1,1 @@
+cargo watch -s "sh .\scripts\clean.sh & sh .\scripts\build_front.sh && cls" -w ./front --why

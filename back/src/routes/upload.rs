@@ -77,9 +77,9 @@ pub async fn upload(
         }
     }
 
-    debug!(
+    info!(
         "[{id}] Responded in {}",
-        time::format(start_timer.elapsed())
+        time::format(start_timer.elapsed(), 2)
     );
 
     JsonApiResponseBuilder::default()

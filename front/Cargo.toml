@@ -24,6 +24,7 @@ serde_json = "1.0.111"
 serde = { version = "1.0.194", features = ["derive"] }
 futures = "0.3.30"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
+base64 = "0.22.1"
 # wasm-bindgen-futures = "0.4.39"
 # serde_json = "1.0.111"
 # gloo-utils = { version = "0.1", features = ["serde"] }
@@ -33,10 +34,13 @@ gloo-timers = { version = "0.3.0", features = ["futures"] }
 [dependencies.web-sys]
 version = "0.3.68"
 features = [
-  'HtmlCanvasElement',
-  'WebGlBuffer',
-  'WebGlProgram',
-  'WebGlRenderingContext',
-  'WebGlShader',
-  'WebGlUniformLocation',
+  # 'HtmlCanvasElement',
+  # 'WebGlBuffer',
+  # 'WebGlProgram',
+  # 'WebGlRenderingContext',
+  # 'WebGlShader',
+  # 'WebGlUniformLocation',
+  "File",
+  "DragEvent",
+  "DataTransfer"
 ]

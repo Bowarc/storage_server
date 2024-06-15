@@ -6,5 +6,5 @@ mod download;
 pub use download::Download;
 mod home;
 pub use home::Home;
-mod info;
+mod dashboard;
 pub use dashboard::Dashboard;

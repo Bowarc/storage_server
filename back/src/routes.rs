@@ -28,21 +28,6 @@ pub async fn root(remote_addr: SocketAddr) -> Response {
     file_response("index.html", ContentType::HTML, remote_addr)
 }
 
-#[rocket::get("/style.css")]
-pub async fn style(remote_addr: SocketAddr) -> Response {
-    file_response("style.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/front.js")]
-pub async fn front(remote_addr: SocketAddr) -> Response {
-    file_response("front.js", ContentType::JavaScript, remote_addr)
-}
-
-#[rocket::get("/front_bg.wasm")]
-pub async fn wasm(remote_addr: SocketAddr) -> Response {
-    file_response("front_bg.wasm", ContentType::WASM, remote_addr)
-}
-
 #[rocket::get("/css/contact.css")]
 pub async fn contactCSS(remote_addr: SocketAddr) -> Response{
     file_response("/css/contact.css", ContentType::CSS, remote_addr)
@@ -95,17 +80,17 @@ pub async fn indexHTML(remote_addr: SocketAddr) -> Response{
 
 #[rocket::get("/lib/live/live.js")]
 pub async fn liveJS(remote_addr: SocketAddr) -> Response{
-    file_response("/lib/live/live", ContentType::JavaScript, remote_addr)
+    file_response("/lib/live/live.js", ContentType::JavaScript, remote_addr)
 }
 
 #[rocket::get("/lib/prism/custom.css")]
 pub async fn customCSS(remote_addr: SocketAddr) -> Response{
-    file_response("/lib/prism/custom", ContentType::CSS, remote_addr)
+    file_response("/lib/prism/custom.css", ContentType::CSS, remote_addr)
 }
 
 #[rocket::get("/lib/prism/gruvbox-dark.css")]
 pub async fn gruvboxdarkCSS(remote_addr: SocketAddr) -> Response{
-    file_response("/lib/prism/gruvbox", ContentType::CSS, remote_addr)
+    file_response("/lib/prism/gruvbox-dark.css", ContentType::CSS, remote_addr)
 }
 
 #[rocket::get("/lib/prism/prism-rust.min.js")]
@@ -115,7 +100,7 @@ pub async fn prism_rust_minJS(remote_addr: SocketAddr) -> Response{
 
 #[rocket::get("/lib/prism/prism.css")]
 pub async fn prismCSS(remote_addr: SocketAddr) -> Response{
-    file_response("/lib/prism/prism", ContentType::CSS, remote_addr)
+    file_response("/lib/prism/prism.css", ContentType::CSS, remote_addr)
 }
 
 #[rocket::get("/lib/prism/prism.min.js")]
@@ -230,7 +215,7 @@ pub async fn sshWEBP(remote_addr: SocketAddr) -> Response{
 
 #[rocket::get("/resources/storage_server.drawio.png")]
 pub async fn storage_server_drawioPNG(remote_addr: SocketAddr) -> Response{
-    file_response("/resources/storage_server.drawio", ContentType::PNG, remote_addr)
+    file_response("/resources/storage_server.drawio.png", ContentType::PNG, remote_addr)
 }
 
 #[rocket::get("/resources/storage_server.drawio100px.png")]
@@ -280,7 +265,7 @@ fn read_static(file_name: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
 #[rocket::options("/upload")]
 pub async fn upload_option() -> crate::response::JsonApiResponse {
     /*
-        We're currently having issues connecting a NextJs sevrer to this storage server
+        We're currently having issues connecting a NextJs server to this storage server
 
         we belive that his might help
         but we have no idea what to set here and in the NextJs config
