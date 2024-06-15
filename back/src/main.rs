@@ -44,14 +44,11 @@ async fn main() {
                 // routes::style,
                 // routes::front,
                 // routes::wasm,
-                // routes::upload,
-                // routes::download,
+                routes::upload,
+                routes::download,
                 // routes::cache_list,
                 // routes::upload_option,
                 routes::root,
-                routes::style,
-                routes::front,
-                routes::wasm,
                 routes::contactCSS,
                 routes::gitcardCSS,
                 routes::homeCSS,
@@ -180,14 +177,12 @@ fn display_config<'a>(
     let display_vec = |data: Vec<String>| -> String {
         let mut out = String::new();
         out.push_str("[\n");
-        for d in data {
-            out.push_str(&format!(" {d}\n"))
-        }
+        out.push_str(&data.iter().map(|d|format!("    {d}\n")).collect::<String>());
         out.push(']');
         out
     };
 
-    info!("Config:\nUsing profile: {profile}\nAddress: {address}:{port}\nWorkers: {workers}\nIndent: {indent}\nHeaders: {ip_headers}\nLimits: {formatted_limits}\nConnection lifetime: {keep_alive_s}s\nShutdown mode: {shutdown_mode}\nRoutes: {formatted_routes}\nCatchers: {formatted_catchers}",
+    info!("\nConfig:\nUsing profile: {profile}\nAddress: {address}:{port}\nWorkers: {workers}\nIndent: {indent}\nHeaders: {ip_headers}\nLimits: {formatted_limits}\nConnection lifetime: {keep_alive_s}s\nShutdown mode: {shutdown_mode}\nRoutes: {formatted_routes}\nCatchers: {formatted_catchers}",
         formatted_limits = display_vec(limits),
         formatted_routes = display_vec(routes),
         formatted_catchers = display_vec(catchers)

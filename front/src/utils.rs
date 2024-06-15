@@ -74,3 +74,33 @@ pub fn remove_script(id: &str) {
         parent_node.remove_child(&script_element).unwrap();
     }
 }
+
+
+
+
+// async fn fetch_dashboard(url: &'static str) -> Result<DashboardData, FetchError> {
+//     let mut opts = RequestInit::new();
+//     opts.method("GET");
+//     opts.mode(RequestMode::Cors);
+
+//     console::log!(opts.clone());
+
+//     let request = Request::new_with_str_and_init(url, &opts)?;
+
+//     console::log!(request.url());
+//     let window = gloo::utils::window();
+//     let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+//     let resp: Response = resp_value.dyn_into().unwrap();
+
+//     let json_data = JsFuture::from(resp.json()?).await?;
+//     console::log!(json_data.clone());
+
+//     let x = json_data
+//         .into_serde::<Vec<String>>()
+//         .unwrap()
+//         .iter()
+//         .map(|s| serde_json::from_str(&s).unwrap())
+//         .collect::<Vec<shared::data::CacheEntry>>();
+
+//     Ok(DashboardData { cache_list: x })
+// }

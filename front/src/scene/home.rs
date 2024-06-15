@@ -1,4 +1,3 @@
-use crate::component;
 use yew::html;
 
 pub struct Home;

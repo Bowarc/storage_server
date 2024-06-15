@@ -37,8 +37,6 @@ impl Component for App {
     }
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        use wasm_bindgen::JsCast as _;
-
         match msg {
             Message::SwitchScene(scene) => {
                 self.current_scene = scene;
