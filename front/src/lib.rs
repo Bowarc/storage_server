@@ -46,8 +46,6 @@ impl Component for App {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        log!("Draw");
-
         html! {
             <div id="global">
             <div id="header">
@@ -70,22 +68,22 @@ impl Component for App {
                 }
             </div>
             <footer>
-                { format!("Rendered: {}", String::from(Date::new_0().to_string()))}
+                { format!("Rendered: {}", String::from(Date::new_0().to_string())) }
             </footer>
             </div>
         }
     }
 }
 
-impl Scene{
-    fn html(&self) -> yew::virtual_dom::VNode{
-        match self{
-            Scene::Home => html!{<><scene::Home /></>},
-            Scene::Upload => html!{<><scene::Upload /></>},
-            Scene::Download => html!{<><scene::Download /></>},
-            Scene::Dashboard => html!{<><scene::Dashboard /></>},
-            Scene::Contact => html!{<><scene::Contact /></>},
-            Scene::Void => html!{<></>}
+impl Scene {
+    fn html(&self) -> yew::virtual_dom::VNode {
+        match self {
+            Scene::Home => html! {<><scene::Home /></>},
+            Scene::Upload => html! {<><scene::Upload /></>},
+            Scene::Download => html! {<><scene::Download /></>},
+            Scene::Dashboard => html! {<><scene::Dashboard /></>},
+            Scene::Contact => html! {<><scene::Contact /></>},
+            Scene::Void => html! {<></>},
         }
     }
 }
@@ -104,6 +102,6 @@ impl std::fmt::Display for Scene {
 }
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
-fn start(){
+fn start() {
     yew::Renderer::<App>::new().render();
 }
