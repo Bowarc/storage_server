@@ -9,6 +9,7 @@ pub struct CacheEntry {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Metadata {
     pub username: String,
+    pub file_name: String,
     pub file_ext: String,
     // ...
 }

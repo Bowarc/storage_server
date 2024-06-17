@@ -11,9 +11,8 @@ impl yew::Component for Dashboard {
     fn create(_ctx: &yew::prelude::Context<Self>) -> Self {
         Self
     }
-    
-    fn view(&self, _ctx: &yew::prelude::Context<Self>) -> yew::prelude::Html {
 
+    fn view(&self, _ctx: &yew::prelude::Context<Self>) -> yew::prelude::Html {
         html! {<>
             {"Dashboard view"}
         </>}

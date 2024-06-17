@@ -59,7 +59,6 @@ impl Cache {
                     );
                     return None;
                 };
-                // ignore data files
 
                 if ext != "meta" {
                     // Not a meta file, don't care
@@ -92,6 +91,15 @@ impl Cache {
                     return None;
                 };
 
+                let Some(file_name) = file_content
+                    .get("name")
+                    .and_then(|val| val.as_str())
+                    .and_then(|s| Some(s.to_string()))
+                else {
+                    warn!("Could not get the name property of cache file '{id}'");
+                    return None;
+                };
+
                 let Some(data_size) = file_content
                     .get("data size")
                     .and_then(|val| val.as_number())
@@ -108,7 +116,11 @@ impl Cache {
                             format!("Could not transform id '{id}' to a usable uuid due to: {e}")
                         })
                         .ok()?,
-                    metadata: Metadata { username, file_ext },
+                    metadata: Metadata {
+                        username,
+                        file_name,
+                        file_ext,
+                    },
                     is_ready: std::sync::atomic::AtomicBool::new(true),
                     data_size: std::sync::atomic::AtomicUsize::new(data_size),
                 }))
@@ -156,13 +168,13 @@ impl Cache {
 
         let file_path = format!("{CACHE_DIRECTORY}/{id}.data");
 
-        if let Err(e) = tokio::fs::File::open(file_path.clone())
+        if let Err(e) = tokio::fs::File::open(&file_path)
             .await
             .map_err(|_| CacheError::FileOpen(file_path))?
             .read_to_end(&mut raw_compressed)
             .await
         {
-            error!("{e}");
+            error!("[{id}] Unable to read the data file: {e}");
             return Err(CacheError::FileRead(format!("{e}")));
         }
 
@@ -170,7 +182,7 @@ impl Cache {
         if let Err(e) =
             brotli::BrotliDecompress(&mut std::io::Cursor::new(raw_compressed), &mut raw)
         {
-            error!("[{id}]Decompression failed:{e}");
+            error!("[{id}] Decompression failed: {e}");
             return Err(CacheError::Decompression);
         }
 
@@ -224,7 +236,7 @@ async fn store(entry: Arc<CacheEntry>, original_data: Vec<u8>) -> Result<usize, 
         Stores a compressed version of the given data.
     ------------------------------------------------------------------------------- */
 
-    // Compression algorithms seems rly uneffective with most files
+    // Some files formats like png are already compressed by default, this is useless
     let encoder_params = brotli::enc::BrotliEncoderParams {
         quality: COMPRESSION_LEVEL,
         ..Default::default()
@@ -266,6 +278,7 @@ async fn store(entry: Arc<CacheEntry>, original_data: Vec<u8>) -> Result<usize, 
 
     let meta = serde_json::to_string_pretty(&json!({
         "username": entry.metadata.username,
+        "name": entry.metadata.file_name,
         "extension": entry.metadata.file_ext,
         "data size": compressed_data_length
     }))

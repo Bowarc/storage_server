@@ -26,8 +26,9 @@ pub async fn upload(
     }
 
     debug!(
-        "Received new upload request on /json\nUsing id: {id}\nUsername: {}\nFile ext: {}\nFile size: {}",
+        "Received new upload request on /json\nUsing id: {id}\nUsername: {}\nFile name: {}\nFile ext: {}\nFile size: {}",
         metadata.username,
+        metadata.file_name,
         metadata.file_ext,
         rocket::data::ByteUnit::Byte(file_data.len() as u64)
     );
@@ -48,7 +49,7 @@ pub async fn upload(
 
     let exec = cache_handle.store(id, metadata, file_content);
 
-    // Release the lock to ba able to wait the end of the 'exec' without denying other calls
+    // Release the lock to be able to wait the end of the 'exec' without denying other calls
     drop(cache_handle);
 
     if wait_store {
@@ -57,10 +58,10 @@ pub async fn upload(
         match exec.await {
             Ok(Ok(())) => {
                 // All good
-            },
+            }
             Ok(Err(e)) => {
-                    error!("[{id}] An error occured while storing the given data: {e}");
-                    return JsonApiResponseBuilder::default()
+                error!("[{id}] An error occured while storing the given data: {e}");
+                return JsonApiResponseBuilder::default()
                     .with_json(
                         json!({"result": "failled", "message": "An error occured while caching the data"}),
                     )
@@ -83,7 +84,7 @@ pub async fn upload(
     );
 
     JsonApiResponseBuilder::default()
-        .with_json(json!({"result": "created", "file_name": id.hyphenated().to_string()}))
+        .with_json(json!({"result": "created", "id": id.hyphenated().to_string()}))
         .with_status(Status::Created)
         .build()
 }

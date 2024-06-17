@@ -38,17 +38,20 @@ pub fn time_since(date: Date) -> String {
         return s(interval, "minute");
     }
 
-    s(interval, "second")   
+    s(interval, "second")
 }
 
-
 pub fn add_script(path: &str, id: &str) {
-    let Some(window) = web_sys::window() else{
-        log!(format!("Could not set script {id} due to: Could not get the window"));
+    let Some(window) = web_sys::window() else {
+        log!(format!(
+            "Could not set script {id} due to: Could not get the window"
+        ));
         return;
     };
-    let Some(document) = window.document() else{
-        log!(format!("Could not set script {id} due to: Could not get the document"));
+    let Some(document) = window.document() else {
+        log!(format!(
+            "Could not set script {id} due to: Could not get the document"
+        ));
         return;
     };
 
@@ -60,12 +63,16 @@ pub fn add_script(path: &str, id: &str) {
 }
 
 pub fn remove_script(id: &str) {
-    let Some(window) = web_sys::window() else{
-        log!(format!("Could not remove script {id} due to: Could not get the window"));
+    let Some(window) = web_sys::window() else {
+        log!(format!(
+            "Could not remove script {id} due to: Could not get the window"
+        ));
         return;
     };
-    let Some(document) = window.document() else{
-        log!(format!("Could not remove script {id} due to: Could not get the document"));
+    let Some(document) = window.document() else {
+        log!(format!(
+            "Could not remove script {id} due to: Could not get the document"
+        ));
         return;
     };
 
@@ -74,9 +81,6 @@ pub fn remove_script(id: &str) {
         parent_node.remove_child(&script_element).unwrap();
     }
 }
-
-
-
 
 // async fn fetch_dashboard(url: &'static str) -> Result<DashboardData, FetchError> {
 //     let mut opts = RequestInit::new();

@@ -28,5 +28,5 @@ pub enum CacheError {
     Serialization,
 
     #[error("Could not deserialize")]
-    Deserialization
+    Deserialization,
 }

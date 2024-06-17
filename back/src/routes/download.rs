@@ -25,13 +25,12 @@ pub async fn download(
         Err(e) => {
             error!("[{id}] Could not load cache due to: {e}");
             return JsonApiResponseBuilder::default()
-            .with_json(json!({
-                "result": "failled",
-                "message": format!("Id not found")
-            }))
-            .with_status(Status::BadRequest)
-            .build()    
-
+                .with_json(json!({
+                    "result": "failled",
+                    "message": format!("Id not found")
+                }))
+                .with_status(Status::BadRequest)
+                .build();
         }
     };
 
