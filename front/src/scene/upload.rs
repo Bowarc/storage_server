@@ -8,23 +8,34 @@ use gloo::{console::log, file::callbacks::FileReader};
 // use web_sys::{DragEvent, Event, FileList, HtmlInputElement};
 // use yew::html::TargetCast;
 // use yew::{html, Callback, Component, Context, Html};
+use std::sync::{Arc, Mutex};
+
+static CURRENT_ID: Mutex<u32> = Mutex::new(0);
+
+fn new_id() -> u32 {
+    let mut guard = CURRENT_ID.lock().unwrap();
+    *guard += 1;
+    *guard - 1
+}
 
 struct FileDetails {
+    id: u32,
     name: String,
     file_type: String,
     data: Vec<u8>,
+    uploaded_id: Option<String>,
 }
 
 pub enum Msg {
     Loaded(String, String, Vec<u8>),
     Load(Vec<File>),
     Upload,
-    Uploaded{id: String},
+    Uploaded { id: u32, upload_id: String },
     UploadError(String),
 }
 
 #[derive(serde::Deserialize)]
-struct UploadData{
+struct UploadData {
     id: String,
     result: String,
 }
@@ -50,9 +61,11 @@ impl yew::Component for Upload {
             Msg::Loaded(file_name, file_type, data) => {
                 self.readers.remove(&file_name);
                 self.files.push(FileDetails {
+                    id: new_id(),
                     data,
                     file_type,
                     name: file_name,
+                    uploaded_id: None,
                 });
                 true
             }
@@ -80,6 +93,7 @@ impl yew::Component for Upload {
             Msg::Upload => {
                 use gloo::utils::format::JsValueSerdeExt as _;
                 for file in self.files.iter() {
+                    let id = file.id;
                     let data = file.data.clone();
                     let ext = file.extension().unwrap_or_default();
                     let name = file.name().unwrap_or_default();
@@ -132,15 +146,28 @@ impl yew::Component for Upload {
                             .into_serde::<UploadData>()
                             .unwrap();
 
-                        let id = data.id.clone();
+                        let upload_id = data.id.clone();
 
-                        Msg::Uploaded{id}
+                        Msg::Uploaded{id, upload_id}
                     });
                 }
                 false
             }
-            Msg::Uploaded{id} => {
+            Msg::Uploaded { id, upload_id } => {
                 log!(format!("Succesfully uploaded with id: {id}"));
+
+                let mut file = self
+                    .files
+                    .iter_mut()
+                    .filter(|f| f.id == id)
+                    .collect::<Vec<_>>();
+                if file.len() != 1 {
+                    panic!("An error occured while trying to update sotred files with received id")
+                }
+                let f = file.get_mut(0).unwrap();
+
+                f.uploaded_id = Some(upload_id);
+
                 true
             }
             Msg::UploadError(e) => {
@@ -195,6 +222,7 @@ impl Upload {
         yew::html! {
             <div class="preview-tile">
                 <p class="preview-name">{ format!("{}", file.name) }</p>
+                <p class="preview-name">{ format!("Upload id: {}", if file.uploaded_id.is_some(){file.uploaded_id.clone().unwrap()}else{String::from("None")})}</p>
                 <div class="preview-media">
                     if file.file_type.contains("image") {
                         <img src={format!("data:{};base64,{}", file.file_type, STANDARD.encode(&file.data))} />
