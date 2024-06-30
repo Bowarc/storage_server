@@ -154,7 +154,6 @@ impl yew::Component for Download {
             }
             Message::DownloadFinished(data) => {
                 use base64::engine::general_purpose::STANDARD;
-                use gloo::utils::window;
                 use wasm_bindgen::JsCast as _;
                 log!(format!("Download finished, data size: {}", data.file.len()));
                 let mut buffer = Vec::new();
