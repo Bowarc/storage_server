@@ -15,14 +15,11 @@ pub enum Scene {
     Home,
     Upload,
     Download,
-    Dashboard,
     Contact,
-    Void,
 }
 
 pub struct App {
     current_scene: Scene,
-    canvas_node_ref: yew::NodeRef,
 }
 
 impl Component for App {
@@ -32,7 +29,6 @@ impl Component for App {
     fn create(_ctx: &Context<Self>) -> Self {
         Self {
             current_scene: Scene::Home,
-            canvas_node_ref: yew::NodeRef::default(),
         }
     }
 
@@ -53,7 +49,7 @@ impl Component for App {
                     <img src="resources/github.webp" alt="Github icon" class="icon"/>
                 </a>
                 <div id="scene_list" class="header_item">{
-                    [ Scene::Home, Scene::Upload, Scene::Download, Scene::Dashboard, Scene::Contact, Scene::Void ].iter().map(|scene|{
+                    [ Scene::Home, Scene::Upload, Scene::Download, Scene::Contact ].iter().map(|scene|{
                         html!{
                             <button class={format!("scene_button{}", if  &self.current_scene == scene {" current"}else{""})} onclick={ctx.link().callback(|_| Message::SwitchScene(*scene))}>
                                 { format!("{scene}") }
@@ -81,9 +77,7 @@ impl Scene {
             Scene::Home => html! {<><scene::Home /></>},
             Scene::Upload => html! {<><scene::Upload /></>},
             Scene::Download => html! {<><scene::Download /></>},
-            Scene::Dashboard => html! {<><scene::Dashboard /></>},
             Scene::Contact => html! {<><scene::Contact /></>},
-            Scene::Void => html! {<></>},
         }
     }
 }
@@ -94,9 +88,7 @@ impl std::fmt::Display for Scene {
             Scene::Home => write!(f, "Home"),
             Scene::Upload => write!(f, "Upload"),
             Scene::Download => write!(f, "Download"),
-            Scene::Dashboard => write!(f, "Dashboard"),
             Scene::Contact => write!(f, "Contact"),
-            Scene::Void => write!(f, "Void"),
         }
     }
 }
