@@ -1,0 +1,1 @@
+cargo watch -s "cls && sh .\scripts\clean_back.sh & sh .\scripts\build_back.sh && cargo r -p back" -w ./back --why

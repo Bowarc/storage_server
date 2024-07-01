@@ -5,6 +5,7 @@ use base64::Engine;
 // use futures::SinkExt;
 use gloo::file::File;
 use gloo::{console::log, file::callbacks::FileReader};
+use yew::virtual_dom::VNode;
 // use web_sys::{DragEvent, Event, FileList, HtmlInputElement};
 // use yew::html::TargetCast;
 // use yew::{html, Callback, Component, Context, Html};
@@ -18,12 +19,19 @@ fn new_id() -> u32 {
     *guard - 1
 }
 
+#[derive(PartialEq)]
+enum FileState {
+    Local,
+    Uploading,
+    Uploaded(String),
+}
+
 struct FileDetails {
     id: u32,
     name: String,
     file_type: String,
-    data: Vec<u8>,
-    uploaded_id: Option<String>,
+    data64: String, // Encoded to base64
+    state: FileState,
 }
 
 pub enum Msg {
@@ -31,7 +39,7 @@ pub enum Msg {
     Load(Vec<File>),
     Upload,
     Uploaded { id: u32, upload_id: String },
-    UploadError(String),
+    UploadError { id: u32, error: String },
 }
 
 #[derive(serde::Deserialize)]
@@ -62,10 +70,10 @@ impl yew::Component for Upload {
                 self.readers.remove(&file_name);
                 self.files.push(FileDetails {
                     id: new_id(),
-                    data,
+                    data64: STANDARD.encode(data),
                     file_type,
                     name: file_name,
-                    uploaded_id: None,
+                    state: FileState::Local,
                 });
                 true
             }
@@ -92,11 +100,17 @@ impl yew::Component for Upload {
             }
             Msg::Upload => {
                 use gloo::utils::format::JsValueSerdeExt as _;
-                for file in self.files.iter() {
+                for file in self.files.iter_mut() {
+                    if file.state != FileState::Local {
+                        log!(format!("File ({})'s state is not local", file.id));
+                        continue;
+                    }
                     let id = file.id;
-                    let data = file.data.clone();
+                    let data64 = file.data64.clone();
                     let ext = file.extension().unwrap_or_default();
                     let name = file.name().unwrap_or_default();
+
+                    file.state = FileState::Uploading;
 
                     ctx.link().send_future(async move{
                         use wasm_bindgen::JsCast as _;
@@ -107,15 +121,13 @@ impl yew::Component for Upload {
                             r
                         };
 
-                        let data = STANDARD.encode(data);
-
                         reqinit.body(Some(&wasm_bindgen::JsValue::from_str(
-                            &format!("{{\"metadata\": {{\"username\": \"TestUser\",\"file_name\": \"{name}\", \"file_ext\": \"{ext}\"}},\"file\": \"{data}\"}}"),
+                            &format!("{{\"metadata\": {{\"username\": \"TestUser\",\"file_name\": \"{name}\", \"file_ext\": \"{ext}\"}},\"file\": \"{data64}\"}}"),
                         )));
 
                         let request = match web_sys::Request::new_with_str_and_init("/upload", &reqinit){
                             Ok(request) => request,
-                            Err(e) => return Msg::UploadError(e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))),
+                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))},
                         };
 
                         request
@@ -127,17 +139,17 @@ impl yew::Component for Upload {
                         let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await.unwrap();
                         let resp: web_sys::Response = match resp_value.dyn_into() {
                             Ok(response) => response,
-                            Err(e) => return Msg::UploadError(e.as_string().unwrap_or(format!("Unable to read the response due to: {e:?}"))),
+                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read the response due to: {e:?}"))},
                         };
 
                         let resp_json = match  resp.json()  {
                             Ok(resp_json) => resp_json,
-                            Err(e) => return Msg::UploadError(e.as_string().unwrap_or(format!("Unable to parse the response due to: {e:?}"))),
+                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to parse the response due to: {e:?}"))},
                         };
 
                         let json_data = match  wasm_bindgen_futures::JsFuture::from(resp_json).await{
                             Ok(json_data) => json_data,
-                            Err(e) => return Msg::UploadError(e.as_string().unwrap_or(format!("Unable to read response data due to: {e:?}"))),
+                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read response data due to: {e:?}"))},
                         };
 
                         log!(format!("Response: {json_data:?}"));
@@ -166,12 +178,12 @@ impl yew::Component for Upload {
                 }
                 let f = file.get_mut(0).unwrap();
 
-                f.uploaded_id = Some(upload_id);
+                f.state = FileState::Uploaded(upload_id);
 
                 true
             }
-            Msg::UploadError(e) => {
-                log!(format!("Received UploadError message with content: {e}"));
+            Msg::UploadError { id, error } => {
+                log!(format!("File ({id}) failled to upload due to: {error}"));
                 true
             }
         }
@@ -179,6 +191,7 @@ impl yew::Component for Upload {
 
     fn view(&self, ctx: &yew::Context<Self>) -> yew::Html {
         use yew::TargetCast as _;
+
         yew::html! {<div class="upload_view">
             <p>{ "Drop your file(s) in the following box, and press upload" }</p>
             <label
@@ -186,7 +199,7 @@ impl yew::Component for Upload {
                     ondrop={ctx.link().callback(|event: yew::DragEvent| {
                         event.prevent_default();
                         let files = event.data_transfer().unwrap().files();
-                        Self::upload_files(files)
+                        Self::load_files(files)
                     })}
                     ondragover={yew::Callback::from(|event: yew::DragEvent| {
                         event.prevent_default();
@@ -202,7 +215,7 @@ impl yew::Component for Upload {
                         multiple={true}
                         onchange={ctx.link().callback(move |e: yew::Event| {
                             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                            Self::upload_files(input.files())
+                            Self::load_files(input.files())
                         })}
                     />
             </label>
@@ -210,25 +223,38 @@ impl yew::Component for Upload {
             <button onclick={ctx.link().callback(|_| Msg::Upload)}>
                 { "Upload !" }
             </button>
-            <div>
-                { for self.files.iter().map(Self::view_file) }
-            </div>
+            <div>{
+                // .rev() Does fix the video issue see #13
+                for self.files.iter().rev().map(Self::view_file)
+            }</div>
         </div> }
     }
 }
 
 impl Upload {
     fn view_file(file: &FileDetails) -> yew::Html {
+        log!(format!(
+            "Displaying file:\nType: {}\nName: {}\ndata64 size: {}",
+            file.file_type,
+            file.name,
+            file.data64.len()
+        ));
         yew::html! {
             <div class="preview-tile">
                 <p class="preview-name">{ format!("{}", file.name) }</p>
-                <p class="preview-name">{ format!("Upload id: {}", if file.uploaded_id.is_some(){file.uploaded_id.clone().unwrap()}else{String::from("None")})}</p>
+                {
+                    match &file.state{
+                        FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
+                        FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
+                        FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
+                    }
+                }
                 <div class="preview-media">
                     if file.file_type.contains("image") {
-                        <img src={format!("data:{};base64,{}", file.file_type, STANDARD.encode(&file.data))} />
+                        <img style="width:30vw; height:auto" src={format!("data:{};base64,{}", file.file_type, file.data64)} />
                     } else if file.file_type.contains("video") {
-                        <video controls={true}>
-                            <source src={format!("data:{};base64,{}", file.file_type, STANDARD.encode(&file.data))} type={file.file_type.clone()}/>
+                        <video style="width:30vw; height:auto" controls={true}>
+                            <source src={format!("data:{};base64,{}", file.file_type, file.data64)} type={file.file_type.clone()}/>
                         </video>
                     }
                 </div>
@@ -236,7 +262,7 @@ impl Upload {
         }
     }
 
-    fn upload_files(files: Option<web_sys::FileList>) -> Msg {
+    fn load_files(files: Option<web_sys::FileList>) -> Msg {
         let mut result = Vec::new();
 
         if let Some(files) = files {
