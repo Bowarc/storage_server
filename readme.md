@@ -1,16 +1,24 @@
-Compressed Delivery Network :D
+# Simple server that stores data
 
-## Notes
-Idk if any security is needed (ouside something against ddos or spam but i wont do that here)  
-About file size, we rly should set a limit, even like a rly high one, but a limit is needed
+My goal was to make something like [transfer.sh](https://transfer.sh/) (which is probably down atm) or [wetransfer](https://wetransfer.com/)
 
-Store different infos in the json ?
-Maybe use ron instead of json
+
+// Compressed Delivery Network :D
 
 
 ## Status
-Paused for now as it was a porject for work but i don't need it for now
 
+- Backend
+    It works well,
+    I think cleanup is needed in the cache management code
+    Routes are ugly but eh, it works
+    I think logs are bad, and it needs better failure management
+
+- Front-end
+    It's really basic
+    Some of the css is still done inline
+    A good design is still needed
+    But it works
 
 ## Roadmap
 - [x] The actual server
@@ -19,7 +27,15 @@ Paused for now as it was a porject for work but i don't need it for now
     - [x] Json api
 - [x] Compression
 - [x] Wasm front end
-    - [x] Dashboard
+    - [x] Simple load and upload
+    - [x] Simple download
+
+## Notes
+Idk if any security is needed (ouside something against ddos or spam but i wont do that here)
+About file size, we rly should set a limit, even like a rly high one, but a limit is needed
+
+Store different infos in the json ?
+Maybe use ron instead of json
 
 
 ## How to use
