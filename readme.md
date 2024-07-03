@@ -9,7 +9,7 @@ Maybe use ron instead of json
 
 
 ## Status
-Paused for now as it was a porject for work but i don't need it for now
+Paused for now as it was a project for work but i don't need it for now
 
 
 ## Roadmap
