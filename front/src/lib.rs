@@ -51,7 +51,7 @@ impl Component for App {
                 <div id="scene_list" class="header_item">{
                     [ Scene::Home, Scene::Upload, Scene::Download, Scene::Contact ].iter().map(|scene|{
                         html!{
-                            <button class={format!("scene_button{}", if  &self.current_scene == scene {" current"}else{""})} onclick={ctx.link().callback(|_| Message::SwitchScene(*scene))}>
+                            <button class={format!("scene_button{}", if &self.current_scene == scene {" current"} else{""})} onclick={ctx.link().callback(|_| Message::SwitchScene(*scene))}>
                                 { format!("{scene}") }
                             </button>
                         }
