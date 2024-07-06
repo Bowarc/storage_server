@@ -1,6 +1,8 @@
-use gloo::console::log;
-use js_sys::Date;
-use yew::{html, Component, Context, Html};
+use {
+    gloo::console::log,
+    js_sys::Date,
+    yew::{html, Component, Context, Html},
+};
 
 mod component;
 mod scene;
@@ -62,7 +64,7 @@ impl Component for App {
                 {
                     self.current_scene.html()
                 }
-                <component::notification::Notification />
+                <component::NotificationManager />
             </div>
             <footer>
                 { format!("Rendered: {}", String::from(Date::new_0().to_string())) }

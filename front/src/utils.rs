@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use gloo::console::log;
-use js_sys::Date;
+use {gloo::console::log, js_sys::Date};
 
 #[derive(Debug)]
 pub enum FetchState<T> {

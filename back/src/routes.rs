@@ -48,6 +48,11 @@ pub async fn upload_css(remote_addr: SocketAddr) -> Response {
     file_response("/css/upload.css", ContentType::CSS, remote_addr)
 }
 
+#[rocket::get("/css/notification.css")]
+pub async fn notification_css(remote_addr: SocketAddr) -> Response {
+    file_response("/css/notification.css", ContentType::CSS, remote_addr)
+}
+
 #[rocket::get("/css/style.css")]
 pub async fn style_css(remote_addr: SocketAddr) -> Response {
     file_response("/css/style.css", ContentType::CSS, remote_addr)

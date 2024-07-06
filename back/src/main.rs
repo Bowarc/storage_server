@@ -55,6 +55,7 @@ async fn main() {
                 routes::upload_css,
                 routes::style_css,
                 routes::theme_css,
+                routes::notification_css,
                 routes::front_js,
                 routes::front_bg_wasm,
                 routes::index_html,
