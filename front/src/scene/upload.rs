@@ -1,13 +1,10 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
+use gloo::{
+    console::log,
+    file::{callbacks::FileReader, File as GlooFile},
+};
 use std::collections::HashMap;
-
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
-use gloo::file::File as GlooFile;
-use gloo::{console::log, file::callbacks::FileReader};
-// use web_sys::{DragEvent, Event, FileList, HtmlInputElement};
-// use yew::html::TargetCast;
-// use yew::{html, Callback, Component, Context, Html};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 static CURRENT_ID: Mutex<u32> = Mutex::new(0);
 
@@ -25,7 +22,7 @@ enum FileState {
     Uploaded(String),
 }
 
-struct FileDetails {
+struct UserFile {
     id: u32,
     name: String,
     file_type: String,
@@ -49,7 +46,7 @@ struct UploadData {
 
 pub struct Upload {
     readers: HashMap<u32, FileReader>,
-    files: Vec<FileDetails>,
+    files: Vec<UserFile>,
 }
 
 impl yew::Component for Upload {
@@ -66,6 +63,20 @@ impl yew::Component for Upload {
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Loaded { id, data } => {
+                unsafe {
+                    // crate::component::notification::push_notification(
+                    //     crate::component::notification::Notif {
+                    //         content: format!("{id}"),
+                    //     },
+                    // )
+                    if let Some(cb) = &mut crate::component::notification::CALLBACK{
+                        log!("Got callback, sending notification");
+                        cb.emit(crate::component::notification::Notif {
+                            content: format!("{id}"),
+                        })
+                    }
+                }
+
                 self.readers.remove(&id);
 
                 let mut file_entries = self
@@ -88,7 +99,7 @@ impl yew::Component for Upload {
                 for file in files.into_iter() {
                     let id = new_id();
 
-                    self.files.push(FileDetails {
+                    self.files.push(UserFile {
                         id,
                         data64: None,
                         name: file.name(),
@@ -112,12 +123,12 @@ impl yew::Component for Upload {
             Msg::Upload => {
                 use gloo::utils::format::JsValueSerdeExt as _;
                 for file in self.files.iter_mut() {
+                    let id = file.id;
                     if file.state != FileState::Local {
-                        log!(format!("File ({})'s state is not local", file.id));
+                        log!(format!("File ({id})'s state is not local"));
                         continue;
                     }
-                    let id = file.id;
-                    let Some(data64) = file.data64.clone() else{
+                    let Some(data64) = file.data64.clone() else {
                         // File not yet loaded
                         continue;
                     };
@@ -207,9 +218,8 @@ impl yew::Component for Upload {
         use yew::TargetCast as _;
 
         yew::html! {<div class="upload_view">
-            <p>{ "Drop your file(s) in the following box, and press upload" }</p>
             <label
-                class = "upload_dragdrop_label"
+                class = "upload_dragdrop"
                 ondrop={ctx.link().callback(|event: yew::DragEvent| {
                     event.prevent_default();
                     let files = event.data_transfer().unwrap().files();
@@ -231,21 +241,20 @@ impl yew::Component for Upload {
                         Self::load_files(input.files())
                     })}
                 />
+                <img  src="/resources/upload.png" />
+                <p>{ "Drop your file(s) here or click to select" }</p>
+                <p class="upload_dragdrop_info">{ "10mb maximum" }</p>
             </label>
-            <p>{ "Drop your images here or click to select" }</p>
-            <button class="upload_button" onclick={ctx.link().callback(|_| Msg::Upload)}>
-                { "Upload !" }
-            </button>
             <div>{
                 // .rev() Does fix the video issue see #13
                 for self.files.iter().map(Self::view_file)
             }</div>
-        </div> }
+        </div>}
     }
 }
 
 impl Upload {
-    // fn view_file(file: &FileDetails) -> yew::Html {
+    // fn view_file(file: &UserFile) -> yew::Html {
     //     log!(format!(
     //         "Displaying file:\nType: {}\nName: {}\ndata64 size: {}",
     //         file.file_type,
@@ -273,14 +282,7 @@ impl Upload {
     //         </div>
     //     </>}
     // }
-    fn view_file(file: &FileDetails) -> yew::Html {
-        log!(format!(
-            "Displaying file:\nType: {}\nName: {}\ndata64 size: {:?}",
-            file.file_type,
-            file.name,
-            file.data64.as_ref().and_then(|data| Some(data.len()))
-        ));
-
+    fn view_file(file: &UserFile) -> yew::Html {
         yew::html! {<div class="upload_file_preview">
 
             <p class="upload_file_preview_name">{ &file.name }</p>
@@ -310,7 +312,7 @@ impl Upload {
     }
 }
 
-impl FileDetails {
+impl UserFile {
     fn extension(&self) -> Option<String> {
         let name = &self.name;
 

@@ -1,8 +1,6 @@
-use std::io::Read;
 
 use base64::Engine;
 use gloo::console::log;
-use web_sys::window;
 use yew::{html, TargetCast as _};
 
 pub struct Download {
