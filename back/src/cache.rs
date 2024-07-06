@@ -1,8 +1,12 @@
-use crate::error::CacheError;
-use rocket::serde::json::serde_json::{self, json};
-use rocket::tokio;
-use shared::data::{CacheEntry, Metadata};
-use std::sync::{atomic::Ordering, Arc};
+use {
+    crate::error::CacheError,
+    rocket::{
+        serde::json::serde_json::{self, json},
+        tokio,
+    },
+    shared::data::{CacheEntry, Metadata},
+    std::sync::{atomic::Ordering, Arc},
+};
 
 const CACHE_DIRECTORY: &'static str = "./cache";
 const COMPRESSION_LEVEL: i32 = 5; // 1..=11

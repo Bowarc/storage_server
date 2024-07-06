@@ -1,10 +1,12 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
-use gloo::{
-    console::log,
-    file::{callbacks::FileReader, File as GlooFile},
+use {
+    crate::component,
+    base64::{engine::general_purpose::STANDARD, Engine},
+    gloo::{
+        console::log,
+        file::{callbacks::FileReader, File as GlooFile},
+    },
+    std::{collections::HashMap, sync::Mutex},
 };
-use std::collections::HashMap;
-use std::sync::Mutex;
 
 static CURRENT_ID: Mutex<u32> = Mutex::new(0);
 
@@ -63,19 +65,6 @@ impl yew::Component for Upload {
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Loaded { id, data } => {
-                unsafe {
-                    // crate::component::notification::push_notification(
-                    //     crate::component::notification::Notif {
-                    //         content: format!("{id}"),
-                    //     },
-                    // )
-                    if let Some(cb) = &mut crate::component::notification::CALLBACK{
-                        log!("Got callback, sending notification");
-                        cb.emit(crate::component::notification::Notif {
-                            content: format!("{id}"),
-                        })
-                    }
-                }
 
                 self.readers.remove(&id);
 
@@ -89,9 +78,23 @@ impl yew::Component for Upload {
                     log!("TODO: manage error: multiple file with same id");
                 }
 
+                let size= data.len();
+
                 let file_entry = file_entries.get_mut(0).unwrap(); // This should never crash as we checked above
                 file_entry.data64 = Some(STANDARD.encode(data));
                 file_entry.state = FileState::Local;
+
+                {
+                    component::push_notification(component::Notification::new(
+                        "Loaded file",
+                        vec![
+                            &format!("Id: {id}"),
+                            &format!("File name: {}", file_entry.name),
+                            &format!("File size: {size}"),
+                        ],
+                        2.5
+                    ));
+                }
 
                 true
             }
@@ -218,6 +221,9 @@ impl yew::Component for Upload {
         use yew::TargetCast as _;
 
         yew::html! {<div class="upload_view">
+            // <button class="upload_button" onclick={ctx.link().callback(|_| Msg::Upload)}>
+            //     { "Upload !" }
+            // </button>
             <label
                 class = "upload_dragdrop"
                 ondrop={ctx.link().callback(|event: yew::DragEvent| {

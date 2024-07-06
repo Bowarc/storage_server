@@ -1,7 +1,8 @@
-
-use base64::Engine;
-use gloo::console::log;
-use yew::{html, TargetCast as _};
+use {
+    base64::Engine,
+    gloo::console::log,
+    yew::{html, TargetCast as _},
+};
 
 pub struct Download {
     input_text: String,
@@ -52,7 +53,7 @@ impl yew::Component for Download {
                 ctx.link().send_future(async move {
                     use wasm_bindgen::JsCast as _;
 
-                    let mut reqinit = {
+                    let reqinit = {
                         let mut r = web_sys::RequestInit::new();
                         r.method("GET");
                         r.mode(web_sys::RequestMode::Cors);
@@ -183,7 +184,8 @@ impl yew::Component for Download {
                 a.set_attribute(
                     "download",
                     &format!("{}.{}", data.metadata.file_name, data.metadata.file_ext),
-                ).unwrap();
+                )
+                .unwrap();
 
                 // Append the anchor to the body, click it, and remove it
                 document.body().unwrap().append_child(&a).unwrap();

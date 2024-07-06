@@ -1,93 +1,146 @@
-use std::{collections::VecDeque, sync::Mutex, time::Duration};
+use std::time::Duration;
 
-use gloo::console::log;
-use yew::Callback;
+use {
+    gloo::console::log,
+    std::{cell::RefCell, sync::Mutex},
+    yew::Callback,
+};
 
-static QUEUE: Mutex<VecDeque<Notif>> = Mutex::new(VecDeque::new());
-const UPDATE_DELAY_MS: u64 = 1000;
+// thread local: https://discord.com/channels/273534239310479360/1120124565591425034/1259034522888966164
+thread_local! {
+    // const: https://discord.com/channels/273534239310479360/1120124565591425034/1259038525823651870
+    static CALLBACK: RefCell<Option<Callback<Notification>>> = const { RefCell::new(None) };
+}
+static CURRENT_ID: Mutex<u32> = Mutex::new(0);
 
-pub static mut CALLBACK: Option<Callback<Notif>> = None;
+pub fn push_notification(notification: Notification) {
+    CALLBACK.with_borrow(|cb_opt| {
+        let Some(cb) = cb_opt else {
+            return;
+        };
+        cb.emit(notification)
+    });
+}
 
-
-pub fn push_notification(notif: Notif) {
-    let mut guard = QUEUE.lock().unwrap();
-
-    guard.push_back(notif);
+fn new_id() -> u32 {
+    let mut guard = CURRENT_ID.lock().unwrap();
+    *guard += 1;
+    *guard - 1
 }
 
 pub enum Msg {
-    Update,
-    Push(Notif)
+    Push(Notification),
+    RemoveAnimation { id: u32 },
+    Remove { id: u32 },
 }
 
 #[derive(PartialEq)]
-pub struct Notif {
-    pub content: String,
+pub struct Notification {
+    id: u32,
+    expired: bool,
+    timeout_s: f64,
+    title: String,
+    content: Vec<String>,
 }
 
-impl Notif{
-    fn update(&mut self){
+impl Notification {
+    pub fn new(title: &str, content: Vec<&str>, timeout_s: f64) -> Self {
+        Self {
+            id: new_id(),
+            expired: false,
+            timeout_s,
+            title: title.to_string(),
+            content: content.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        }
+    }
+    fn update(&mut self) {
         // update time
     }
 
-    fn render(&self) -> yew::Html{
-        yew::html!{<div class="notification">{
-            &self.content
-        }</div>}
+    fn render(&self) -> yew::Html {
+        yew::html! {<div class={ format!("notification{}", if self.expired{" notification_expired"}else{""}) }>
+            <div class="notification_title">{
+                &self.title
+            }</div>
+            <div class="notification_content">{
+                for self.content.iter().map(|bit|{
+                    yew::html!{<>{
+                        bit
+                    }
+                    <br />
+                    </>}
+
+                })
+            }</div>
+        </div>}
     }
 }
 
-pub struct Notification {
-    notifs: Vec<Notif>,
+pub struct NotificationManager {
+    notifications: Vec<Notification>,
 }
 
-impl yew::Component for Notification {
+impl yew::Component for NotificationManager {
     type Message = Msg;
     type Properties = ();
 
     fn create(ctx: &yew::Context<Self>) -> Self {
-        unsafe{
-            CALLBACK = Some(ctx.link().callback(Msg::Push));
+        CALLBACK.set(Some(ctx.link().callback(Msg::Push)));
+        Self {
+            notifications: Vec::new(),
         }
-
-        Self { notifs: Vec::new() }
     }
 
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Update => {
-                log!("Notification update");
-                ctx.link().send_future(async{
-                    gloo_timers::future::sleep(Duration::from_millis(UPDATE_DELAY_MS)).await;
-                    Msg::Update
+            Msg::Push(notification) => {
+                // log!("Added notification");
+
+                ctx.link().send_future(async move {
+                    gloo_timers::future::sleep(Duration::from_secs_f64(notification.timeout_s))
+                        .await;
+                    Msg::RemoveAnimation {
+                        id: notification.id,
+                    }
                 });
-                let mut guard = QUEUE.lock().unwrap();
-                while let Some(notif) = guard.pop_front(){
-                    self.notifs.push(notif)
+                self.notifications.push(notification);
+            }
+            Msg::RemoveAnimation { id } => {
+                let mut entries = self
+                    .notifications
+                    .iter_mut()
+                    .filter(|n| n.id == id)
+                    .collect::<Vec<_>>();
+
+                if entries.len() != 1 {
+                    log!("TODO: manage error: multiple notification with same id");
                 }
 
-                for notif in self.notifs.iter_mut(){
-                    notif.update();
-                }
+                let notification = entries.get_mut(0).unwrap(); // This should never crash as we checked above
+                notification.expired = true;
+                ctx.link().send_future(async move {
+                    gloo_timers::future::sleep(Duration::from_secs_f64(
+                        0.1, /* This needs to be 1/10 of the css animation time, otherwise it leave a remnant image of the notification */
+                    ))
+                    .await;
+                    Msg::Remove { id }
+                });
             }
-            Msg::Push(notif) => {
-                log!("Added notification");
-                self.notifs.push(notif)
+            Msg::Remove { id } => {
+                // log!(format!("Removing {id}"));
+                self.notifications.retain(|n| n.id != id);
             }
         }
         true
     }
 
     fn view(&self, ctx: &yew::Context<Self>) -> yew::Html {
-
-        yew::html! {
-            for self.notifs.iter().map(Notif::render)
-        }
+        yew::html! {<div class="notification_block">{
+            for self.notifications.iter().map(Notification::render)
+        }</div>}
     }
 
     fn rendered(&mut self, ctx: &yew::prelude::Context<Self>, first_render: bool) {
-        log!("Notification re-rendered");
+        // log!("Notification re-rendered");
     }
-
-
 }
