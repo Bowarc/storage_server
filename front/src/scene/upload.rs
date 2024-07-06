@@ -88,11 +88,10 @@ impl yew::Component for Upload {
                     component::push_notification(component::Notification::new(
                         "Loaded file",
                         vec![
-                            &format!("Id: {id}"),
                             &format!("File name: {}", file_entry.name),
                             &format!("File size: {size}"),
                         ],
-                        2.5
+                        5.
                     ));
                 }
 
@@ -206,6 +205,15 @@ impl yew::Component for Upload {
                 }
                 let f = file.get_mut(0).unwrap();
 
+                component::push_notification(component::Notification::new(
+                    "Uploaded file",
+                    vec![
+                        &format!("File name: {}", f.name),
+                        &format!("Upload Id: {upload_id}"),
+                    ],
+                    5.
+                ));
+
                 f.state = FileState::Uploaded(upload_id);
 
                 true
@@ -221,9 +229,9 @@ impl yew::Component for Upload {
         use yew::TargetCast as _;
 
         yew::html! {<div class="upload_view">
-            // <button class="upload_button" onclick={ctx.link().callback(|_| Msg::Upload)}>
-            //     { "Upload !" }
-            // </button>
+            <button class="upload_button" onclick={ctx.link().callback(|_| Msg::Upload)}>
+                { "Upload !" }
+            </button>
             <label
                 class = "upload_dragdrop"
                 ondrop={ctx.link().callback(|event: yew::DragEvent| {
