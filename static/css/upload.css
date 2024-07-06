@@ -1,14 +1,33 @@
 .upload_view{
     text-align: center;
+    color: var(--text-500);
 }
 
-.upload_dragdrop_label{
+.upload_dragdrop{
+    padding: 3vh;
     display: block;
-    border: 2px solid red;
-/*    width: 99.vw;*/
+    border: 2px solid var(--secondary-500);
     width: 60vw;
     margin-left: 20vw;
-    height: 100px;
+/*    height: 100px;*/
+    border-radius: 20px;
+    border: 2px dashed white;
+    cursor: grab;
+}
+
+.upload_dragdrop > img {
+    margin-top: 1vh;
+    width: 3vw;
+    height: auto;
+}
+
+.upload_dragdrop > p{
+    margin-top: 1vh;
+    margin-bottom: 0px;
+}
+
+.upload_dragdrop_info{
+    color: color-mix(in srgb, var(--text-900), transparent 80%);
 }
 
 .upload_input{
@@ -16,7 +35,12 @@
 }
 
 .upload_button{
-    color: blue;
+    color: var(--text-300);
+/*    background-color: var(--accent-200);*/
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    font-size: 100px;
 }
 
 .upload_file_preview{

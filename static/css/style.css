@@ -8,11 +8,11 @@
 }
 
 html{
-  color: var(--text-900);
+/*  color: var(--text-900);*/
 }
 
 body{
-  background-color: transparent;
+  background-color: var(--background-50);
   width: 100%;
   height: 100%;
   margin: 0;

@@ -78,6 +78,7 @@ async fn main() {
                 routes::python_webp,
                 routes::rust_webp,
                 routes::ssh_webp,
+                routes::upload_png,
                 routes::storage_server_drawio_png,
                 routes::storage_server_drawio100px_png,
                 routes::storage_server_drawio200px_png,

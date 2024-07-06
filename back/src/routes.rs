@@ -173,6 +173,11 @@ pub async fn ssh_webp(remote_addr: SocketAddr) -> Response {
     file_response("/resources/ssh.webp", ContentType::WEBP, remote_addr)
 }
 
+#[rocket::get("/resources/upload.png")]
+pub async fn upload_png(remote_addr: SocketAddr) -> Response {
+    file_response("/resources/upload.png", ContentType::PNG, remote_addr)
+}
+
 #[rocket::get("/resources/storage_server.drawio.png")]
 pub async fn storage_server_drawio_png(remote_addr: SocketAddr) -> Response {
     file_response(

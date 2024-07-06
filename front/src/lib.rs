@@ -62,6 +62,7 @@ impl Component for App {
                 {
                     self.current_scene.html()
                 }
+                <component::notification::Notification />
             </div>
             <footer>
                 { format!("Rendered: {}", String::from(Date::new_0().to_string())) }
