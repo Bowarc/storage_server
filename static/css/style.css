@@ -13,6 +13,7 @@ html{
 
 body{
   background-color: var(--background-50);
+  color: var(--text-500);
   width: 100%;
   height: 100%;
   margin: 0;
