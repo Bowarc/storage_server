@@ -1,5 +1,5 @@
 #[rocket::get("/cache_list")]
-pub async fn cache_list(
+pub async fn _cache_list(
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
     remote_addr: std::net::SocketAddr,
 ) -> String {

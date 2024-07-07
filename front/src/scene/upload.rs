@@ -177,7 +177,7 @@ impl yew::Component for Upload {
                             &format!("{{\"metadata\": {{\"username\": \"TestUser\",\"file_name\": \"{name}\", \"file_ext\": \"{ext}\"}},\"file\": \"{data64}\"}}"),
                         )));
 
-                        let request = match web_sys::Request::new_with_str_and_init("/upload", &reqinit){
+                        let request = match web_sys::Request::new_with_str_and_init("/api/upload", &reqinit){
                             Ok(request) => request,
                             Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))},
                         };
@@ -282,28 +282,20 @@ impl yew::Component for Upload {
                 true
             }
             Message::RemoveLocal { id } => {
-                let Some(file) = self.files.iter().find(|f| f.id == id) else{
-                    crate::component::push_notification(
-                        crate::component::Notification::info(
-                            "Error",
-                            vec![
-                                "Could not find given file",
-                            ],
-                            5.
-                            )
-                    );
+                let Some(file) = self.files.iter().find(|f| f.id == id) else {
+                    crate::component::push_notification(crate::component::Notification::info(
+                        "Error",
+                        vec!["Could not find given file"],
+                        5.,
+                    ));
                     return true;
                 };
 
-                crate::component::push_notification(
-                    crate::component::Notification::info(
-                        "File removed",
-                        vec![
-                            &format!("File name: {}", file.name),
-                        ],
-                        5.
-                        )
-                );
+                crate::component::push_notification(crate::component::Notification::info(
+                    "File removed",
+                    vec![&format!("File name: {}", file.name)],
+                    5.,
+                ));
 
                 self.files.retain(|f| f.id != id);
                 true

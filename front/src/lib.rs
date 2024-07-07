@@ -1,5 +1,4 @@
 use {
-    gloo::console::log,
     js_sys::Date,
     yew::{html, Component, Context, Html},
 };
