@@ -10,12 +10,29 @@ pub async fn download(
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
 ) -> JsonApiResponse {
     debug!("Download request of: {id}");
+
+    // Only contains numbers, lowercase letters or dashes
+    if !id
+        .chars()
+        .all(|c| c.is_digit(10) || c == '-' || c.is_ascii_lowercase())
+        || id.len() != /* uuid default length */ 37
+    {
+        error!("Given id doesn't match expected character range");
+        return JsonApiResponseBuilder::default()
+            .with_status(Status::BadRequest)
+            .with_json(json!({
+                "result": "denied",
+                "message": "Given id doesn't match expected character range"
+            }))
+            .build();
+    }
+
     let Ok(id) = uuid::Uuid::from_str(id) else {
         error!("Could not understand given id: {id}");
         return JsonApiResponseBuilder::default()
             .with_json(json!( {
-                "message": format!("could not understand given id: {id}"),
-                "result": "denied"
+                "result": "denied",
+                "message": format!("could not understand given id: {id}")
             }))
             .with_status(Status::BadRequest)
             .build();

@@ -28,10 +28,16 @@ fn new_id() -> u32 {
     *guard - 1
 }
 
-pub enum Msg {
+pub enum Message {
     Push(Notification),
     RemoveAnimation { id: u32 },
     Remove { id: u32 },
+}
+
+#[derive(PartialEq)]
+pub enum NotificationStyle{
+    Info,
+    Error,
 }
 
 #[derive(PartialEq)]
@@ -41,17 +47,26 @@ pub struct Notification {
     timeout_s: f64,
     title: String,
     content: Vec<String>,
+    style: NotificationStyle,
 }
 
 impl Notification {
-    pub fn new(title: &str, content: Vec<&str>, timeout_s: f64) -> Self {
+    pub fn new(title: &str, content: Vec<&str>, timeout_s: f64, style: NotificationStyle) -> Self {
         Self {
             id: new_id(),
             expired: false,
             timeout_s,
             title: title.to_string(),
             content: content.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            style,
         }
+    }
+    pub fn info(title: &str, content: Vec<&str>, timeout_s: f64) -> Self{
+        Self::new(title, content, timeout_s, NotificationStyle::Info)
+    }
+
+    pub fn error(title: &str, content: Vec<&str>, timeout_s: f64) -> Self{
+        Self::new(title, content, timeout_s, NotificationStyle::Error)
     }
     fn update(&mut self) {
         // update time
@@ -81,11 +96,11 @@ pub struct NotificationManager {
 }
 
 impl yew::Component for NotificationManager {
-    type Message = Msg;
+    type Message = Message;
     type Properties = ();
 
     fn create(ctx: &yew::Context<Self>) -> Self {
-        CALLBACK.set(Some(ctx.link().callback(Msg::Push)));
+        CALLBACK.set(Some(ctx.link().callback(Message::Push)));
         Self {
             notifications: Vec::new(),
         }
@@ -93,19 +108,19 @@ impl yew::Component for NotificationManager {
 
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Push(notification) => {
+            Message::Push(notification) => {
                 // log!("Added notification");
 
                 ctx.link().send_future(async move {
                     gloo_timers::future::sleep(Duration::from_secs_f64(notification.timeout_s))
                         .await;
-                    Msg::RemoveAnimation {
+                    Message::RemoveAnimation {
                         id: notification.id,
                     }
                 });
                 self.notifications.push(notification);
             }
-            Msg::RemoveAnimation { id } => {
+            Message::RemoveAnimation { id } => {
                 let mut entries = self
                     .notifications
                     .iter_mut()
@@ -123,10 +138,10 @@ impl yew::Component for NotificationManager {
                         0.1, /* This needs to be 1/10 of the css animation time, otherwise it leave a remnant image of the notification */
                     ))
                     .await;
-                    Msg::Remove { id }
+                    Message::Remove { id }
                 });
             }
-            Msg::Remove { id } => {
+            Message::Remove { id } => {
                 // log!(format!("Removing {id}"));
                 self.notifications.retain(|n| n.id != id);
             }
