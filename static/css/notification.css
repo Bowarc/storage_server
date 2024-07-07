@@ -1,5 +1,4 @@
 .notification{
-    border: 2px solid var(--accent-600);
     background-color: var(--text-background-color);
     border-radius: 10px;
     padding: 10px;
@@ -7,6 +6,19 @@
     margin-bottom: 0.3vh;
 /*    height: ;*/
 }
+
+.notification_info{
+    border: 2px solid var(--accent-600);
+}
+
+.notification_error{
+    border: 2px solid red;
+}
+
+.notification_error .notification_title{
+    color: red;
+}
+
 .notification_title{
     text-decoration: underline;
     margin-bottom: 1%;

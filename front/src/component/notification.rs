@@ -73,7 +73,16 @@ impl Notification {
     }
 
     fn render(&self) -> yew::Html {
-        yew::html! {<div class={ format!("notification{}", if self.expired{" notification_expired"}else{""}) }>
+        yew::html! {<div class={
+                format!(
+                    "notification{}{}",
+                    if self.expired{" notification_expired"}else{""},
+                    match self.style{
+                        NotificationStyle::Info => " notification_info",
+                        NotificationStyle::Error => " notification_error"
+                    }
+                )
+            }>
             <div class="notification_title">{
                 &self.title
             }</div>
