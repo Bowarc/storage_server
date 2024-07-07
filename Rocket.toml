@@ -23,7 +23,7 @@ file = "0 B"
 form = "0 B"
 msgpack = "0 B"
 string = "0 B"
-json = "50 MiB" # 100 ko for images ? 
+json = "70 MiB" # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
 
 
 # ## set only when compiled in debug mode, i.e, `cargo build`

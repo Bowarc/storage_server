@@ -232,12 +232,12 @@ fn file_response(file_name: &str, content_type: ContentType, remote_addr: Socket
 
 fn read_static(file_name: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
     use std::io::Read as _;
-    trace!("New static file query from {remote_addr}: {file_name}");
     let mut buffer = Vec::new();
-    let _size = std::fs::File::open(format!("./static/{file_name}"))
+    let size = std::fs::File::open(format!("./static/{file_name}"))
         .ok()?
         .read_to_end(&mut buffer)
         .ok()?;
+    trace!("Static file query from {remote_addr}: {file_name} ({size} bytes)");
     Some(buffer)
 }
 

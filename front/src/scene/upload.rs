@@ -9,6 +9,7 @@ use {
 };
 
 static CURRENT_ID: Mutex<u32> = Mutex::new(0);
+const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
 
 fn new_id() -> u32 {
     let mut guard = CURRENT_ID.lock().unwrap();
@@ -22,6 +23,7 @@ enum FileState {
     Local,
     Uploading,
     Uploaded(String),
+    UploadError(String),
 }
 
 struct UserFile {
@@ -32,9 +34,9 @@ struct UserFile {
     state: FileState,
 }
 
-pub enum Msg {
-    Loaded { id: u32, data: Vec<u8> },
+pub enum Message {
     Load(Vec<GlooFile>),
+    Loaded { id: u32, data: Vec<u8> },
     Upload,
     Uploaded { id: u32, upload_id: String },
     UploadError { id: u32, error: String },
@@ -52,7 +54,7 @@ pub struct Upload {
 }
 
 impl yew::Component for Upload {
-    type Message = Msg;
+    type Message = Message;
     type Properties = ();
 
     fn create(_ctx: &yew::Context<Self>) -> Self {
@@ -64,40 +66,7 @@ impl yew::Component for Upload {
 
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Loaded { id, data } => {
-
-                self.readers.remove(&id);
-
-                let mut file_entries = self
-                    .files
-                    .iter_mut()
-                    .filter(|f| f.id == id)
-                    .collect::<Vec<_>>();
-
-                if file_entries.len() != 1 {
-                    log!("TODO: manage error: multiple file with same id");
-                }
-
-                let size= data.len();
-
-                let file_entry = file_entries.get_mut(0).unwrap(); // This should never crash as we checked above
-                file_entry.data64 = Some(STANDARD.encode(data));
-                file_entry.state = FileState::Local;
-
-                {
-                    component::push_notification(component::Notification::new(
-                        "Loaded file",
-                        vec![
-                            &format!("File name: {}", file_entry.name),
-                            &format!("File size: {size}"),
-                        ],
-                        5.
-                    ));
-                }
-
-                true
-            }
-            Msg::Load(files) => {
+            Message::Load(files) => {
                 for file in files.into_iter() {
                     let id = new_id();
 
@@ -112,7 +81,7 @@ impl yew::Component for Upload {
                     let link = ctx.link().clone();
 
                     let task = gloo::file::callbacks::read_as_bytes(&file, move |res| {
-                        link.send_message(Msg::Loaded {
+                        link.send_message(Message::Loaded {
                             id,
                             data: res.expect("failed to read file"),
                         })
@@ -122,7 +91,54 @@ impl yew::Component for Upload {
                 }
                 true
             }
-            Msg::Upload => {
+            Message::Loaded { id, data } => {
+                self.readers.remove(&id);
+
+                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
+                    log!(format!("[Error] Could not get file ({id}) from list"));
+                    crate::component::push_notification(crate::component::Notification::error(
+                        "Internal error",
+                        vec![&format!(
+                            "Could not find file with id {id} in local file list."
+                        )],
+                        5.,
+                    ));
+                    return true;
+                };
+
+                let data_size = data.len();
+
+                if data_size > SIZE_LIMIT_BYTES {
+                    crate::component::push_notification(crate::component::Notification::error(
+                        "File too large",
+                        vec![
+                            &format!("File: {}", file.name),
+                            &format!("File size: {:.0} MB", data_size as f64 / (1024. * 1024.)),
+                            &format!("Max size: {:.0} MB", SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)),
+                        ],
+                        5.,
+                    ));
+                    self.files.retain(|f| f.id != id);
+                    return true;
+                }
+
+                file.data64 = Some(STANDARD.encode(data));
+                file.state = FileState::Local;
+
+                {
+                    component::push_notification(component::Notification::info(
+                        "Loaded file",
+                        vec![
+                            &format!("File name: {}", file.name),
+                            &format!("File size: {data_size}"),
+                        ],
+                        5.,
+                    ));
+                }
+
+                true
+            }
+            Message::Upload => {
                 use gloo::utils::format::JsValueSerdeExt as _;
                 for file in self.files.iter_mut() {
                     let id = file.id;
@@ -154,7 +170,7 @@ impl yew::Component for Upload {
 
                         let request = match web_sys::Request::new_with_str_and_init("/upload", &reqinit){
                             Ok(request) => request,
-                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))},
+                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))},
                         };
 
                         request
@@ -163,20 +179,23 @@ impl yew::Component for Upload {
                             .unwrap();
 
                         let window = gloo::utils::window();
-                        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await.unwrap();
+                        let resp_value = match wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await{
+                            Ok(resp_value) => resp_value,
+                            Err(e) =>  return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to receive the response due to: {e:?}"))},
+                        };
                         let resp: web_sys::Response = match resp_value.dyn_into() {
                             Ok(response) => response,
-                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read the response due to: {e:?}"))},
+                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read the response due to: {e:?}"))},
                         };
 
                         let resp_json = match  resp.json()  {
                             Ok(resp_json) => resp_json,
-                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to parse the response due to: {e:?}"))},
+                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to parse the response due to: {e:?}"))},
                         };
 
                         let json_data = match  wasm_bindgen_futures::JsFuture::from(resp_json).await{
                             Ok(json_data) => json_data,
-                            Err(e) => return Msg::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read response data due to: {e:?}"))},
+                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read response data due to: {e:?}"))},
                         };
 
                         log!(format!("Response: {json_data:?}"));
@@ -187,39 +206,63 @@ impl yew::Component for Upload {
 
                         let upload_id = data.id.clone();
 
-                        Msg::Uploaded{id, upload_id}
+                        Message::Uploaded{id, upload_id}
                     });
                 }
-                false
+                true
             }
-            Msg::Uploaded { id, upload_id } => {
+            Message::Uploaded { id, upload_id } => {
                 log!(format!("Succesfully uploaded with id: {id}"));
 
-                let mut file = self
-                    .files
-                    .iter_mut()
-                    .filter(|f| f.id == id)
-                    .collect::<Vec<_>>();
-                if file.len() != 1 {
-                    panic!("An error occured while trying to update sorted files with received id")
-                }
-                let f = file.get_mut(0).unwrap();
+                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
+                    log!(format!("[Error] Could not get file ({id}) from list"));
+                    crate::component::push_notification(crate::component::Notification::error(
+                        "Internal error",
+                        vec![&format!(
+                            "Could not find file with id {id} in local file list."
+                        )],
+                        5.,
+                    ));
+                    return true;
+                };
 
-                component::push_notification(component::Notification::new(
+                component::push_notification(component::Notification::info(
                     "Uploaded file",
                     vec![
-                        &format!("File name: {}", f.name),
+                        &format!("File name: {}", file.name),
                         &format!("Upload Id: {upload_id}"),
                     ],
-                    5.
+                    5.,
                 ));
 
-                f.state = FileState::Uploaded(upload_id);
+                file.state = FileState::Uploaded(upload_id);
 
                 true
             }
-            Msg::UploadError { id, error } => {
+            Message::UploadError { id, error } => {
                 log!(format!("File ({id}) failled to upload due to: {error}"));
+
+                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
+                    log!(format!("[Error] Could not get file ({id}) from list"));
+                    component::push_notification(component::Notification::error(
+                        "Upload error",
+                        vec![
+                            &format!("File name: [ERROR] Unknown file"),
+                            &format!("{error}"),
+                        ],
+                        5.,
+                    ));
+                    return true;
+                };
+
+                component::push_notification(component::Notification::error(
+                    "Upload error",
+                    vec![&format!("File name: {}", file.name), &format!("{error}")],
+                    10.,
+                ));
+
+                file.state = FileState::UploadError(error);
+
                 true
             }
         }
@@ -229,7 +272,7 @@ impl yew::Component for Upload {
         use yew::TargetCast as _;
 
         yew::html! {<div class="upload_view">
-            <button class="upload_button" onclick={ctx.link().callback(|_| Msg::Upload)}>
+            <button class="upload_button" onclick={ctx.link().callback(|_| Message::Upload)}>
                 { "Upload !" }
             </button>
             <label
@@ -306,12 +349,13 @@ impl Upload {
                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
                     FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
+                    FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
                 }
             }
         </div>}
     }
 
-    fn load_files(files: Option<web_sys::FileList>) -> Msg {
+    fn load_files(files: Option<web_sys::FileList>) -> Message {
         let mut result = Vec::new();
 
         if let Some(files) = files {
@@ -322,7 +366,7 @@ impl Upload {
                 .map(GlooFile::from);
             result.extend(files);
         }
-        Msg::Load(result)
+        Message::Load(result)
     }
 }
 
