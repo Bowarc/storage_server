@@ -4,16 +4,17 @@
 }
 
 .upload_dragdrop{
-    padding: 3vh;
     display: block;
-    border: 2px solid var(--accent-600);
+
+    padding: 3vh;
+    margin: 0px auto 2vh; /* Align center + 2vh margin bottom*/
+
     width: 60vw;
-    margin-left: 20vw;
-/*    height: 100px;*/
+
+    border: 2px dashed var(--accent-600);
     border-radius: 20px;
-    border: 2px dashed white;
+
     cursor: grab;
-    margin-bottom: 2vh;
 }
 
 .upload_dragdrop > img {
@@ -37,17 +38,78 @@
 
 .upload_button{
     color: var(--text-700);
-/*    background-color: var(--accent-200);*/
+
     background-color: transparent;
     border: 1px solid transparent;
+
     border-radius: 5px;
     font-size: 100px;
+
+    margin: 0px auto 0px; /* Align center */
 }
 
 .upload_file_preview{
+    --space-between-elems: 1vw;
+    padding-left: var(--space-between-elems);
+
+    display: inline-flex; /* Makes elements go side by side */
+
     width: 50vw;
-    margin-left: 25vw;
+
+    margin: 0px auto 1vh; /* Align center */
+
+    text-align: left;
+
     border: 2px solid var(--accent-500);
     border-radius: 20px;
-    margin-bottom: 1vh;
+}
+
+.upload_file_preview_img_bg{
+    --img-size: 3vw;
+
+    position: relative;
+    margin: auto 0px auto; /* Align center vertically */
+
+    background-color: rgb(25, 25, 25);
+    border-radius: 50%;
+
+    width: var(--img-size);
+    height: var(--img-size);
+}
+
+.upload_file_preview_img_bg > img{
+    width: calc(var(--img-size) /2);
+    position: absolute;
+    top: 25%;
+    left: 25%;
+}
+
+.upload_file_preview_info{
+    padding-left: var(--space-between-elems);
+}
+
+.upload_file_preview_delete_button_wrapper{
+    --img-size: 2vw;
+    margin: 0px 0px auto auto;
+}
+
+.upload_file_preview_delete_button{
+    --img-size: 2vw;
+
+    position: relative;
+    margin: auto 0px auto; /* Align center vertically */
+
+    border-radius: 50%;
+
+    width: var(--img-size);
+    height: var(--img-size);
+    background-color: rgb(25, 25, 25);
+    border: none;
+}
+
+.upload_file_preview_delete_button > img{
+    width: var(--img-size);
+    position: absolute;
+    top: 0px;
+    left: 0px;
 }
