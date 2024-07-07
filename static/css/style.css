@@ -73,7 +73,7 @@ a {
   text-decoration: None;
 }
 
-#description {
+/*#description {
   --side-margin: 20%;
   margin-left:  var(--side-margin);
   margin-right: var(--side-margin) ; 
@@ -84,7 +84,7 @@ a {
   -webkit-backdrop-filter: blur(var(--blur-size));
   background-color: var(--text-background-color);
   text-align: left;
-}
+}*/
 
 /* https://stackoverflow.com/a/62221520 ily */
 #global {
@@ -101,11 +101,9 @@ a {
 }
 
 footer {
-  margin-top: 5%;
   text-align: right;
   background-color: transparent;
 }
-
 
 .warning{
   color: black;

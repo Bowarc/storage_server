@@ -40,6 +40,8 @@ pub enum Message {
     Upload,
     Uploaded { id: u32, upload_id: String },
     UploadError { id: u32, error: String },
+
+    RemoveLocal { id: u32 },
 }
 
 #[derive(serde::Deserialize)]
@@ -114,7 +116,10 @@ impl yew::Component for Upload {
                         vec![
                             &format!("File: {}", file.name),
                             &format!("File size: {:.0} MB", data_size as f64 / (1024. * 1024.)),
-                            &format!("Max size: {:.0} MB", SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)),
+                            &format!(
+                                "Max size: {:.0} MB",
+                                SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)
+                            ),
                         ],
                         5.,
                     ));
@@ -130,7 +135,7 @@ impl yew::Component for Upload {
                         "Loaded file",
                         vec![
                             &format!("File name: {}", file.name),
-                            &format!("File size: {data_size}"),
+                            &format!("File size: {:.1}mb", data_size as f64 / (1024. * 1024.)),
                         ],
                         5.,
                     ));
@@ -140,6 +145,9 @@ impl yew::Component for Upload {
             }
             Message::Upload => {
                 use gloo::utils::format::JsValueSerdeExt as _;
+
+                let mut count = 0;
+
                 for file in self.files.iter_mut() {
                     let id = file.id;
                     if file.state != FileState::Local {
@@ -154,6 +162,7 @@ impl yew::Component for Upload {
                     let name = file.name().unwrap_or_default();
 
                     file.state = FileState::Uploading;
+                    count += 1;
 
                     ctx.link().send_future(async move{
                         use wasm_bindgen::JsCast as _;
@@ -209,6 +218,13 @@ impl yew::Component for Upload {
                         Message::Uploaded{id, upload_id}
                     });
                 }
+
+                crate::component::push_notification(crate::component::Notification::info(
+                    "Info",
+                    vec![&format!("Uploading {count} files")],
+                    10.,
+                ));
+
                 true
             }
             Message::Uploaded { id, upload_id } => {
@@ -265,6 +281,33 @@ impl yew::Component for Upload {
 
                 true
             }
+            Message::RemoveLocal { id } => {
+                let Some(file) = self.files.iter().find(|f| f.id == id) else{
+                    crate::component::push_notification(
+                        crate::component::Notification::info(
+                            "Error",
+                            vec![
+                                "Could not find given file",
+                            ],
+                            5.
+                            )
+                    );
+                    return true;
+                };
+
+                crate::component::push_notification(
+                    crate::component::Notification::info(
+                        "File removed",
+                        vec![
+                            &format!("File name: {}", file.name),
+                        ],
+                        5.
+                        )
+                );
+
+                self.files.retain(|f| f.id != id);
+                true
+            }
         }
     }
 
@@ -300,11 +343,38 @@ impl yew::Component for Upload {
                 />
                 <img  src="/resources/upload.png" />
                 <p>{ "Drop your file(s) here or click to select" }</p>
-                <p class="upload_dragdrop_info">{ "10mb maximum" }</p>
+                <p class="upload_dragdrop_info">{ format!("{:.0}mb maximum", SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)) }</p>
             </label>
             <div>{
                 // .rev() Does fix the video issue see #13
-                for self.files.iter().map(Self::view_file)
+                for self.files.iter().map(|file: &UserFile|{
+                    let id = file.id;
+
+                    yew::html! {<div class="upload_file_preview">
+                        <div class="upload_file_preview_img_bg"><img src="/resources/upload.png" /></div>
+                        <div class="upload_file_preview_info">
+                            <p class="upload_file_preview_name">{ &file.name }</p>
+                            {
+                                match &file.state{
+                                    FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
+                                    FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
+                                    FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
+                                    FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
+                                    FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
+                                }
+                            }
+                        </div>
+
+                        if matches!(file.state, FileState::Local) {
+                            <div class="upload_file_preview_delete_button_wrapper" onclick={ctx.link().callback(move |_| Message::RemoveLocal { id })}>
+                                <button class="upload_file_preview_delete_button">
+                                    <img src="/resources/delete.png" />
+                                </button>
+                            </div>
+                        }
+
+                    </div>}
+                })
             }</div>
         </div>}
     }
@@ -339,21 +409,30 @@ impl Upload {
     //         </div>
     //     </>}
     // }
-    fn view_file(file: &UserFile) -> yew::Html {
-        yew::html! {<div class="upload_file_preview">
+    // fn view_file(file: &UserFile) -> yew::Html {
+    //     yew::html! {<div class="upload_file_preview">
+    //         <div class="upload_file_preview_img_bg"><img  src="/resources/upload.png" /></div>
+    //         <div class="upload_file_preview_info">
+    //             <p class="upload_file_preview_name">{ &file.name }</p>
+    //             {
+    //                 match &file.state{
+    //                     FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
+    //                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
+    //                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
+    //                     FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
+    //                     FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
+    //                 }
+    //             }
+    //         </div>
 
-            <p class="upload_file_preview_name">{ &file.name }</p>
-            {
-                match &file.state{
-                    FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
-                    FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
-                    FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
-                    FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
-                    FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
-                }
-            }
-        </div>}
-    }
+    //             if matches!(file.state, FileState::Local) {
+    //                 <button class="upload_file_preview_delete_button">
+    //                     <img  src="/resources/delete.png" />
+    //                 </button>
+    //             }
+
+    //     </div>}
+    // }
 
     fn load_files(files: Option<web_sys::FileList>) -> Message {
         let mut result = Vec::new();

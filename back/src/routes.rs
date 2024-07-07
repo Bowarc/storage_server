@@ -183,6 +183,11 @@ pub async fn upload_png(remote_addr: SocketAddr) -> Response {
     file_response("/resources/upload.png", ContentType::PNG, remote_addr)
 }
 
+#[rocket::get("/resources/delete.png")]
+pub async fn delete_png(remote_addr: SocketAddr) -> Response {
+    file_response("/resources/delete.png", ContentType::PNG, remote_addr)
+}
+
 #[rocket::get("/resources/storage_server.drawio.png")]
 pub async fn storage_server_drawio_png(remote_addr: SocketAddr) -> Response {
     file_response(

@@ -80,6 +80,7 @@ async fn main() {
                 routes::rust_webp,
                 routes::ssh_webp,
                 routes::upload_png,
+                routes::delete_png,
                 routes::storage_server_drawio_png,
                 routes::storage_server_drawio100px_png,
                 routes::storage_server_drawio200px_png,
