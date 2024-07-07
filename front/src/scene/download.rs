@@ -16,7 +16,7 @@ pub enum Message {
 }
 
 #[derive(serde::Deserialize)]
-struct DownloadData {
+pub struct DownloadData {
     file: String,
     metadata: DownloadMetaData,
 }
@@ -50,6 +50,12 @@ impl yew::Component for Download {
 
                 let id = self.input_text.clone();
 
+                crate::component::push_notification(crate::component::Notification::info(
+                    "Download start",
+                    vec![&format!("Downloading {id}")],
+                    5.
+                ));
+
                 ctx.link().send_future(async move {
                     use wasm_bindgen::JsCast as _;
 
@@ -61,7 +67,7 @@ impl yew::Component for Download {
                     };
 
                     let request = match web_sys::Request::new_with_str_and_init(
-                        &format!("/download/{id}"),
+                        &format!("/api/download/{id}"),
                         &reqinit,
                     ) {
                         Ok(request) => request,
@@ -79,10 +85,18 @@ impl yew::Component for Download {
                         .unwrap();
 
                     let window = gloo::utils::window();
-                    let resp_value =
-                        wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-                            .await
-                            .unwrap();
+                    let resp_value = match wasm_bindgen_futures::JsFuture::from(
+                        window.fetch_with_request(&request),
+                    )
+                    .await
+                    {
+                        Ok(resp_value) => resp_value,
+                        Err(e) => {
+                            return Message::DownloadFailled(e.as_string().unwrap_or(format!(
+                                "Unable to receive the response due to: {e:?}"
+                            )))
+                        }
+                    };
                     let resp: web_sys::Response =
                         match resp_value.dyn_into() {
                             Ok(response) => response,
@@ -225,6 +239,12 @@ impl yew::Component for Download {
             }
             Message::DownloadFailled(e) => {
                 log!(format!("Download failled with: {e}"));
+                crate::component::push_notification(crate::component::Notification::error(
+                    "Download failed",
+                    vec![&format!("{e}")],
+                    5.,
+                ));
+
                 false
             }
         }

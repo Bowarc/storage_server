@@ -3,8 +3,8 @@ use {
     rocket::{http::Status, serde::json::serde_json::json},
 };
 
-#[rocket::post("/upload", format = "application/json", data = "<data>")]
-pub async fn upload(
+#[rocket::post("/api/upload", format = "application/json", data = "<data>")]
+pub async fn api_upload(
     data: rocket::serde::json::Json<shared::data::UploadData>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
 ) -> JsonApiResponse {
@@ -13,7 +13,7 @@ pub async fn upload(
     let id = uuid::Uuid::new_v4();
     let metadata = data.metadata.clone();
     let file_data = &data.file;
-    let wait_store = true; // Probably better to make this an endpoint like /upload/ and /upload/awaited/
+    let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/
 
     // Validation of user input
     if !regex::Regex::new(r"^[A-Za-z0-9]*$")

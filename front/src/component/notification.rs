@@ -68,9 +68,6 @@ impl Notification {
     pub fn error(title: &str, content: Vec<&str>, timeout_s: f64) -> Self{
         Self::new(title, content, timeout_s, NotificationStyle::Error)
     }
-    fn update(&mut self) {
-        // update time
-    }
 
     fn render(&self) -> yew::Html {
         yew::html! {<div class={
@@ -158,13 +155,9 @@ impl yew::Component for NotificationManager {
         true
     }
 
-    fn view(&self, ctx: &yew::Context<Self>) -> yew::Html {
+    fn view(&self, _ctx: &yew::Context<Self>) -> yew::Html {
         yew::html! {<div class="notification_block">{
             for self.notifications.iter().map(Notification::render)
         }</div>}
-    }
-
-    fn rendered(&mut self, ctx: &yew::prelude::Context<Self>, first_render: bool) {
-        // log!("Notification re-rendered");
     }
 }

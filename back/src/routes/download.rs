@@ -4,8 +4,8 @@ use {
     std::str::FromStr,
 };
 
-#[rocket::get("/download/<id>")]
-pub async fn download(
+#[rocket::get("/api/download/<id>")]
+pub async fn api_download(
     id: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
 ) -> JsonApiResponse {
@@ -14,9 +14,7 @@ pub async fn download(
     // Only contains numbers, lowercase letters or dashes
     if !id
         .chars()
-        .all(|c| c.is_digit(10) || c == '-' || c.is_ascii_lowercase())
-        || id.len() != /* uuid default length */ 37
-    {
+        .all(|c| c.is_digit(10) || c == '-' || c.is_ascii_lowercase()){
         error!("Given id doesn't match expected character range");
         return JsonApiResponseBuilder::default()
             .with_status(Status::BadRequest)
@@ -28,11 +26,11 @@ pub async fn download(
     }
 
     let Ok(id) = uuid::Uuid::from_str(id) else {
-        error!("Could not understand given id: {id}");
+        error!("Invalid id: {id}");
         return JsonApiResponseBuilder::default()
             .with_json(json!( {
                 "result": "denied",
-                "message": format!("could not understand given id: {id}")
+                "message": format!("Invalid id: {id}")
             }))
             .with_status(Status::BadRequest)
             .build();
