@@ -15,6 +15,7 @@ mod upload_route;
 pub use dashboard_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use download_route::*;
+use rocket::tokio::io::AsyncReadExt;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;
 
@@ -25,225 +26,163 @@ pub async fn root(remote_addr: SocketAddr) -> Response {
         Hi, please take a look at the /examples directory to understand how to use this api
     ";
 
-    file_response("index.html", ContentType::HTML, remote_addr)
-}
-
-#[rocket::get("/favicon.ico")]
-pub async fn favicon_ico(remote_addr: SocketAddr) -> Response {
-    file_response("favicon.ico", ContentType::Icon, remote_addr)
-}
-
-#[rocket::get("/css/contact.css")]
-pub async fn contact_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/contact.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/css/home.css")]
-pub async fn home_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/home.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/css/upload.css")]
-pub async fn upload_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/upload.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/css/notification.css")]
-pub async fn notification_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/notification.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/css/style.css")]
-pub async fn style_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/style.css", ContentType::CSS, remote_addr)
-}
-
-#[rocket::get("/css/theme.css")]
-pub async fn theme_css(remote_addr: SocketAddr) -> Response {
-    file_response("/css/theme.css", ContentType::CSS, remote_addr)
+    static_file_response("index.html", ContentType::HTML, remote_addr).await
 }
 
 #[rocket::get("/front.js")]
 pub async fn front_js(remote_addr: SocketAddr) -> Response {
-    file_response("/front.js", ContentType::JavaScript, remote_addr)
+    static_file_response("/front.js", ContentType::JavaScript, remote_addr).await
 }
 
 #[rocket::get("/front_bg.wasm")]
 pub async fn front_bg_wasm(remote_addr: SocketAddr) -> Response {
-    file_response("/front_bg.wasm", ContentType::WASM, remote_addr)
+    static_file_response("/front_bg.wasm", ContentType::WASM, remote_addr).await
 }
 
 #[rocket::get("/index.html")]
 pub async fn index_html(remote_addr: SocketAddr) -> Response {
-    file_response("/index.html", ContentType::HTML, remote_addr)
+    static_file_response("/index.html", ContentType::HTML, remote_addr).await
 }
 
-#[rocket::get("/lib/live/live.js")]
-pub async fn live_js(remote_addr: SocketAddr) -> Response {
-    file_response("/lib/live/live.js", ContentType::JavaScript, remote_addr)
+#[rocket::get("/favicon.ico")]
+pub async fn favicon_ico(remote_addr: SocketAddr) -> Response {
+    static_file_response("favicon.ico", ContentType::Icon, remote_addr).await
 }
 
-#[rocket::get("/lib/zoom/zoom.css")]
-pub async fn zoom_css(remote_addr: SocketAddr) -> Response {
-    file_response("/lib/zoom/zoom.css", ContentType::CSS, remote_addr)
+// The goal of this method, is to not use FileServer (because i wanna make sure of what file i serve)
+// but i can't do #[rocket::get("/<file>")] as i want to use the get root path for the download api
+#[rocket::get("/resources/<file>")]
+pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
+    #[rustfmt::skip]
+    const ALLOWED_FILES: &[&'static str] = &[
+        "bash.webp", "c.webp", "cpp.webp",
+        "csharp.webp", "css.webp", "git.webp",
+        "github.webp", "html.webp", "java.webp",
+        "javascript.webp", "kotlin.webp", "php.webp",
+        "pwsh.webp", "pwsh2.webp", "python.webp",
+        "rust.webp", "ssh.webp", "upload.png",
+        "delete.png", "storage_server.drawio.png",
+        "storage_server.drawio100px.png",
+        "storage_server.drawio200px.png",
+        "zig.webp"
+    ];
+
+    if !ALLOWED_FILES.contains(&file) {
+        return Response {
+            status: Status::NotFound,
+            content: Vec::new(),
+            content_type: ContentType::Any,
+        };
+    }
+
+    serve_static("/resources", file, remote_addr).await
 }
 
-#[rocket::get("/lib/zoom/zoom.js")]
-pub async fn zoom_js(remote_addr: SocketAddr) -> Response {
-    file_response("/lib/zoom/zoom.js", ContentType::JavaScript, remote_addr)
+#[rocket::get("/css/<file>")]
+pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
+    const ALLOWED_FILES: &[&'static str] = &[
+        "contact.css",
+        "home.css",
+        "uplaod.css",
+        "notification.css",
+        "style.css",
+        "theme.css",
+    ];
+
+    if !ALLOWED_FILES.contains(&file) {
+        return Response {
+            status: Status::NotFound,
+            content: Vec::new(),
+            content_type: ContentType::Any,
+        };
+    }
+
+    serve_static("/css", file, remote_addr).await
 }
 
-#[rocket::get("/resources/bash.webp")]
-pub async fn bash_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/bash.webp", ContentType::WEBP, remote_addr)
+#[rocket::get("/lib/live/<file>")]
+pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
+    const ALLOWED_FILES: &[&'static str] = &["live.js"];
+
+    if !ALLOWED_FILES.contains(&file) {
+        return Response {
+            status: Status::NotFound,
+            content: Vec::new(),
+            content_type: ContentType::Any,
+        };
+    }
+
+    serve_static("/lib/live", file, remote_addr).await
 }
 
-#[rocket::get("/resources/c.webp")]
-pub async fn c_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/c.webp", ContentType::WEBP, remote_addr)
+#[rocket::get("/lib/zoom/<file>")]
+pub async fn static_lib_zoom(file: &str, remote_addr: SocketAddr) -> Response {
+    const ALLOWED_FILES: &[&'static str] = &["zoom.js", "zoom.css"];
+
+    if !ALLOWED_FILES.contains(&file) {
+        return Response {
+            status: Status::NotFound,
+            content: Vec::new(),
+            content_type: ContentType::Any,
+        };
+    }
+
+    serve_static("/lib/zoom", file, remote_addr).await
 }
 
-#[rocket::get("/resources/cpp.webp")]
-pub async fn cpp_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/cpp.webp", ContentType::WEBP, remote_addr)
+pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Response {
+    fn ext(file_name: &str) -> Option<&str> {
+        if !file_name.contains(".") {
+            return None;
+        }
+
+        let dot_index = file_name.rfind(".").unwrap();
+
+        Some(&file_name[(dot_index + 1)..file_name.len()])
+    }
+
+    let content_type = ext(file)
+        .and_then(ContentType::from_extension)
+        .unwrap_or_else(|| {
+            error!("Could not infer content type of file: {file}, requested in {path}");
+            ContentType::Any
+        });
+
+    static_file_response(&format!("{path}/file"), content_type, remote_addr).await
 }
 
-#[rocket::get("/resources/csharp.webp")]
-pub async fn csharp_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/csharp.webp", ContentType::WEBP, remote_addr)
-}
 
-#[rocket::get("/resources/css.webp")]
-pub async fn css_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/css.webp", ContentType::WEBP, remote_addr)
-}
+async fn static_file_response(
+    file_name: &str,
+    content_type: ContentType,
+    remote_addr: SocketAddr,
+) -> Response {
+    async fn read_static(file_name: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
+        let mut buffer = Vec::new();
 
-#[rocket::get("/resources/git.webp")]
-pub async fn git_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/git.webp", ContentType::WEBP, remote_addr)
-}
+        let size = rocket::tokio::fs::File::open(format!("./static/{file_name}"))
+            .await
+            .ok()?
+            .read_to_end(&mut buffer)
+            .await
+            .ok()?;
 
-#[rocket::get("/resources/github.webp")]
-pub async fn github_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/github.webp", ContentType::WEBP, remote_addr)
-}
+        trace!("Static file query from {remote_addr}: {file_name} ({size} bytes)");
+        Some(buffer)
+    }
 
-#[rocket::get("/resources/html.webp")]
-pub async fn html_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/html.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/java.webp")]
-pub async fn java_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/java.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/javascript.webp")]
-pub async fn javascript_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/javascript.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/kotlin.webp")]
-pub async fn kotlin_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/kotlin.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/php.webp")]
-pub async fn php_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/php.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/pwsh.webp")]
-pub async fn pwsh_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/pwsh.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/pwsh2.webp")]
-pub async fn pwsh2_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/pwsh2.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/python.webp")]
-pub async fn python_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/python.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/rust.webp")]
-pub async fn rust_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/rust.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/ssh.webp")]
-pub async fn ssh_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/ssh.webp", ContentType::WEBP, remote_addr)
-}
-
-#[rocket::get("/resources/upload.png")]
-pub async fn upload_png(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/upload.png", ContentType::PNG, remote_addr)
-}
-
-#[rocket::get("/resources/delete.png")]
-pub async fn delete_png(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/delete.png", ContentType::PNG, remote_addr)
-}
-
-#[rocket::get("/resources/storage_server.drawio.png")]
-pub async fn storage_server_drawio_png(remote_addr: SocketAddr) -> Response {
-    file_response(
-        "/resources/storage_server.drawio.png",
-        ContentType::PNG,
-        remote_addr,
-    )
-}
-
-#[rocket::get("/resources/storage_server.drawio100px.png")]
-pub async fn storage_server_drawio100px_png(remote_addr: SocketAddr) -> Response {
-    file_response(
-        "/resources/storage_server.drawio100px.png",
-        ContentType::PNG,
-        remote_addr,
-    )
-}
-
-#[rocket::get("/resources/storage_server.drawio200px.png")]
-pub async fn storage_server_drawio200px_png(remote_addr: SocketAddr) -> Response {
-    file_response(
-        "/resources/storage_server.drawio200px.png",
-        ContentType::PNG,
-        remote_addr,
-    )
-}
-
-#[rocket::get("/resources/zig.webp")]
-pub async fn zig_webp(remote_addr: SocketAddr) -> Response {
-    file_response("/resources/zig.webp", ContentType::WEBP, remote_addr)
-}
-
-fn file_response(file_name: &str, content_type: ContentType, remote_addr: SocketAddr) -> Response {
-    match read_static(file_name, remote_addr) {
+    match read_static(file_name, remote_addr).await {
         Some(bytes) => Response {
             status: Status::Ok,
             content: bytes,
             content_type: content_type,
         },
         None => Response {
-            status: Status::InternalServerError,
+            status: Status::NotFound,
             content: Vec::new(),
-            content_type: ContentType::Plain,
+            content_type: ContentType::Any,
         },
     }
-}
-
-fn read_static(file_name: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
-    use std::io::Read as _;
-    let mut buffer = Vec::new();
-    let size = std::fs::File::open(format!("./static/{file_name}"))
-        .ok()?
-        .read_to_end(&mut buffer)
-        .ok()?;
-    trace!("Static file query from {remote_addr}: {file_name} ({size} bytes)");
-    Some(buffer)
 }
 
 #[rocket::options("/upload")]
