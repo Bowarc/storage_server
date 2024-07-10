@@ -83,7 +83,7 @@ pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
     const ALLOWED_FILES: &[&'static str] = &[
         "contact.css",
         "home.css",
-        "uplaod.css",
+        "upload.css",
         "notification.css",
         "style.css",
         "theme.css",
@@ -148,30 +148,32 @@ pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Re
             ContentType::Any
         });
 
-    static_file_response(&format!("{path}/file"), content_type, remote_addr).await
+    info!("Serving {path}/file w/ type: {content_type:?}");
+
+    static_file_response(&format!("{path}/{file}"), content_type, remote_addr).await
 }
 
 
 async fn static_file_response(
-    file_name: &str,
+    path: &str,
     content_type: ContentType,
     remote_addr: SocketAddr,
 ) -> Response {
-    async fn read_static(file_name: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
+    async fn read_static(path: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
         let mut buffer = Vec::new();
 
-        let size = rocket::tokio::fs::File::open(format!("./static/{file_name}"))
+        let size = rocket::tokio::fs::File::open(format!("./static/{path}"))
             .await
             .ok()?
             .read_to_end(&mut buffer)
             .await
             .ok()?;
 
-        trace!("Static file query from {remote_addr}: {file_name} ({size} bytes)");
+        trace!("Static file query from {remote_addr}: {path} ({size} bytes)");
         Some(buffer)
     }
 
-    match read_static(file_name, remote_addr).await {
+    match read_static(path, remote_addr).await {
         Some(bytes) => Response {
             status: Status::Ok,
             content: bytes,
