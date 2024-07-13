@@ -11,24 +11,18 @@ path = "src/main.rs"
 
 [dependencies]
 shared = { path ="../shared" }
-random = { git = "https://github.com/bowarc/Crates", package = "random" }
-time = { git = "https://github.com/bowarc/Crates", package = "time" }
-maths = { git = "https://github.com/bowarc/Crates", package = "maths" }
+time.workspace = true
 gloo = "0.10.0" # Yew depends on this version
 js-sys = "0.3.68"
 yew = { version = "0.21.0", features = ["csr"] } # csr allows access to yew::Renderer
 wasm-bindgen = { version = "0.2.92"}
 wasm-bindgen-futures = "0.4.41"
-wasm-timer = "0.2.5"
+# wasm-timer = "0.2.5"
 serde_json = "1.0.111"
-serde = { version = "1.0.194", features = ["derive"] }
+serde.workspace = true
 futures = "0.3.30"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 base64 = "0.22.1"
-# wasm-bindgen-futures = "0.4.39"
-# serde_json = "1.0.111"
-# gloo-utils = { version = "0.1", features = ["serde"] }
-# mem = { git = "https://github.com/bowarc/Crates" , package = "mem"}
 
 
 [dependencies.web-sys]
