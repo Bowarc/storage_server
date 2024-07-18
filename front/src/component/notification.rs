@@ -16,6 +16,7 @@ static CURRENT_ID: Mutex<u32> = Mutex::new(0);
 pub fn push_notification(notification: Notification) {
     CALLBACK.with_borrow(|cb_opt| {
         let Some(cb) = cb_opt else {
+            log!("[ERROR] Could not add notification: Notification storage not initialized");
             return;
         };
         cb.emit(notification)
@@ -35,7 +36,7 @@ pub enum Message {
 }
 
 #[derive(PartialEq)]
-pub enum NotificationStyle{
+pub enum NotificationStyle {
     Info,
     Error,
 }
@@ -61,11 +62,11 @@ impl Notification {
             style,
         }
     }
-    pub fn info(title: &str, content: Vec<&str>, timeout_s: f64) -> Self{
+    pub fn info(title: &str, content: Vec<&str>, timeout_s: f64) -> Self {
         Self::new(title, content, timeout_s, NotificationStyle::Info)
     }
 
-    pub fn error(title: &str, content: Vec<&str>, timeout_s: f64) -> Self{
+    pub fn error(title: &str, content: Vec<&str>, timeout_s: f64) -> Self {
         Self::new(title, content, timeout_s, NotificationStyle::Error)
     }
 
@@ -85,10 +86,9 @@ impl Notification {
             }</div>
             <div class="notification_content">{
                 for self.content.iter().map(|bit|{
-                    yew::html!{<>{
-                        bit
-                    }
-                    <br />
+                    yew::html!{<>
+                        { bit }
+                        <br />
                     </>}
 
                 })
@@ -127,17 +127,10 @@ impl yew::Component for NotificationManager {
                 self.notifications.push(notification);
             }
             Message::RemoveAnimation { id } => {
-                let mut entries = self
-                    .notifications
-                    .iter_mut()
-                    .filter(|n| n.id == id)
-                    .collect::<Vec<_>>();
-
-                if entries.len() != 1 {
-                    log!("TODO: manage error: multiple notification with same id");
-                }
-
-                let notification = entries.get_mut(0).unwrap(); // This should never crash as we checked above
+                let Some(notification) = self.notifications.iter_mut().find(|n| n.id == id) else {
+                    log!(format!("[ERROR] Could not find notification ({id}), unable to remove it's css animation"));
+                    return true;
+                };
                 notification.expired = true;
                 ctx.link().send_future(async move {
                     gloo_timers::future::sleep(Duration::from_secs_f64(

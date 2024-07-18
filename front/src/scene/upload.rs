@@ -5,16 +5,17 @@ use {
         console::log,
         file::{callbacks::FileReader, File as GlooFile},
     },
-    std::{collections::HashMap, sync::Mutex},
+    std::{collections::HashMap, sync::atomic::{AtomicU32, Ordering}},
 };
 
-static CURRENT_ID: Mutex<u32> = Mutex::new(0);
+static CURRENT_ID: AtomicU32 = AtomicU32::new(0);
 const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
 
 fn new_id() -> u32 {
-    let mut guard = CURRENT_ID.lock().unwrap();
-    *guard += 1;
-    *guard - 1
+    let id = CURRENT_ID.load(Ordering::Relaxed);
+    CURRENT_ID.store(id+1, Ordering::Relaxed);
+
+    id
 }
 
 #[derive(PartialEq)]
