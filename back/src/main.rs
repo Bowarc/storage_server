@@ -5,6 +5,9 @@ extern crate thiserror;
 #[macro_use(trace, debug, info, warn, error)]
 extern crate log;
 
+#[macro_use(lazy_static)]
+extern crate lazy_static;
+
 mod cache;
 mod catchers;
 mod error;
@@ -12,6 +15,55 @@ mod response;
 mod routes;
 
 static mut JSON_REQ_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
+
+// Needed for tests
+pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
+    let Some(cache) = cache::Cache::new() else {
+        error!("Failled to load cache");
+        std::process::exit(1)
+    };
+
+    let rocket = rocket::build()
+        .manage(rocket::tokio::sync::RwLock::new(cache))
+        .register("/", rocket::catchers![catchers::root_403])
+        .register(
+            "/upload",
+            rocket::catchers![catchers::upload_400, catchers::upload_413],
+        )
+        .mount(
+            "/",
+            rocket::routes![
+                routes::root,
+                routes::front_js,
+                routes::front_bg_wasm,
+                routes::index_html,
+                routes::static_resource,
+                routes::static_css,
+                routes::static_lib_live,
+                routes::static_lib_zoom,
+                routes::favicon_ico,
+                routes::api_upload,
+                // routes::api_upload_put,
+                routes::api_download,
+                routes::api_download_get,
+                routes::api_download_get_proxy,
+                routes::api_download_head,
+            ],
+        ).ignite().await.unwrap();
+
+
+    // Safety:
+    //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
+    unsafe {
+        JSON_REQ_LIMIT = rocket
+            .config()
+            .limits
+            .get("json")
+            .expect("Failled to read the normal and default config")
+    }
+
+    rocket
+}
 
 #[rocket::main]
 async fn main() {
@@ -27,52 +79,9 @@ async fn main() {
         message = "Program start"
     );
 
-    let cache =
-        rocket::tokio::sync::RwLock::new(cache::Cache::new().expect("Could not load cache"));
-
-    let rocket = rocket::build()
-        .manage(cache)
-        .register("/", rocket::catchers![catchers::root_403])
-        .register(
-            "/upload",
-            rocket::catchers![catchers::upload_400, catchers::upload_413],
-        )
-        .mount(
-            "/",
-            rocket::routes![
-                routes::root,
-                routes::front_js,
-                routes::front_bg_wasm,
-                routes::index_html,
-
-                routes::static_resource,
-                routes::static_css,
-                routes::static_lib_live,
-                routes::static_lib_zoom,
-
-                routes::favicon_ico,
-
-                routes::api_upload,
-                routes::api_upload2,
-
-                routes::api_download,
-            ],
-        )
-        .ignite()
-        .await
-        .unwrap();
+    let rocket = build_rocket().await;
 
     display_config(rocket.config(), rocket.routes(), rocket.catchers());
-
-    // Safety:
-    //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
-    unsafe {
-        JSON_REQ_LIMIT = rocket
-            .config()
-            .limits
-            .get("json")
-            .expect("Failled to read the normal and default config")
-    }
 
     rocket.launch().await.unwrap();
 }
@@ -115,10 +124,10 @@ fn display_config<'a>(
             let name = route
                 .name
                 .as_ref()
-                .map(|name| name.as_ref())
+                .map(std::borrow::Cow::as_ref)
                 .unwrap_or("[ERROR] Undefined");
             let method = route.method.as_str();
-            format!("{method:<7} {uri:<15} {name}")
+            format!("{method:<5} {uri:<20} {name}")
         })
         .collect::<Vec<String>>();
 
@@ -128,14 +137,14 @@ fn display_config<'a>(
             let name = catcher
                 .name
                 .as_ref()
-                .map(|name| name.as_ref())
+                .map(std::borrow::Cow::as_ref)
                 .unwrap_or("[ERROR] Undefined");
             let code = catcher
                 .code
                 .map(|code| code.to_string())
                 .unwrap_or("[ERROR] Undefined".to_string());
 
-            format!("{code:<7} {base:<15} {name}")
+            format!("{code:<5} {base:<20} {name}")
         })
         .collect::<Vec<String>>();
 

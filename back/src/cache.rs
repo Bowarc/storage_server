@@ -7,8 +7,10 @@ use {
     shared::data::{CacheEntry, Metadata},
     std::sync::{atomic::Ordering, Arc},
 };
-
+#[cfg(not(test))]
 const CACHE_DIRECTORY: &'static str = "./cache";
+#[cfg(test)]
+const CACHE_DIRECTORY: &'static str = "../cache"; // For some reason, tests launch path is ./back
 const COMPRESSION_LEVEL: i32 = 5; // 1..=11
 
 #[derive(Default)]
@@ -21,7 +23,7 @@ impl Cache {
     pub fn new() -> Option<Self> {
         use std::str::FromStr as _;
         let files = std::fs::read_dir(CACHE_DIRECTORY)
-            .map_err(|e| format!("Could not open cache dir due to: {e}"))
+            .map_err(|e| error!("Could not open cache dir due to: {e}"))
             .ok()?;
 
         // The default one is bad
@@ -34,7 +36,7 @@ impl Cache {
                 let metadata = entry
                     .metadata()
                     .map_err(|e| {
-                        format!(
+                        error!(
                             "Could not read metadata from cache file '{p}' due to: {e}",
                             p = display_path(entry.path())
                         )
@@ -71,10 +73,10 @@ impl Cache {
 
                 let file_content: serde_json::Value = serde_json::from_str(
                     &std::fs::read_to_string(path.clone())
-                        .map_err(|e| format!("Could not open cache file '{id}' due to: {e}"))
+                        .map_err(|e| error!("Could not open cache file '{id}' due to: {e}"))
                         .ok()?,
                 )
-                .map_err(|e| format!("Could not deserialize cache file '{id}' due to: {e}"))
+                .map_err(|e| error!("Could not deserialize cache file '{id}' due to: {e}"))
                 .ok()?;
 
                 let Some(username) = file_content
@@ -158,10 +160,20 @@ impl Cache {
         })
     }
 
+    pub async fn get_meta(&self, id: uuid::Uuid) -> Result<Metadata, CacheError> {
+        Ok(self
+            .data
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or(CacheError::NotFound)?
+            .metadata
+            .clone())
+    }
+
     pub async fn load(&self, id: uuid::Uuid) -> Result<(Metadata, Vec<u8>), CacheError> {
         use tokio::io::AsyncReadExt;
-
         // Load and decompress the given cache entry
+
         let entry = self
             .data
             .iter()

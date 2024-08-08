@@ -1,3 +1,5 @@
+use crate::response::ResponseBuilder;
+
 use {
     crate::response::Response,
     rocket::http::{ContentType, Status},
@@ -68,11 +70,9 @@ pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
     ];
 
     if !ALLOWED_FILES.contains(&file) {
-        return Response {
-            status: Status::NotFound,
-            content: Vec::new(),
-            content_type: ContentType::Any,
-        };
+        return ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .build();
     }
 
     serve_static("/resources", file, remote_addr).await
@@ -90,11 +90,9 @@ pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
     ];
 
     if !ALLOWED_FILES.contains(&file) {
-        return Response {
-            status: Status::NotFound,
-            content: Vec::new(),
-            content_type: ContentType::Any,
-        };
+        return ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .build();
     }
 
     serve_static("/css", file, remote_addr).await
@@ -105,11 +103,9 @@ pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
     const ALLOWED_FILES: &[&'static str] = &["live.js"];
 
     if !ALLOWED_FILES.contains(&file) {
-        return Response {
-            status: Status::NotFound,
-            content: Vec::new(),
-            content_type: ContentType::Any,
-        };
+        return ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .build();
     }
 
     serve_static("/lib/live", file, remote_addr).await
@@ -120,17 +116,16 @@ pub async fn static_lib_zoom(file: &str, remote_addr: SocketAddr) -> Response {
     const ALLOWED_FILES: &[&'static str] = &["zoom.js", "zoom.css"];
 
     if !ALLOWED_FILES.contains(&file) {
-        return Response {
-            status: Status::NotFound,
-            content: Vec::new(),
-            content_type: ContentType::Any,
-        };
+        return ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .build();
     }
 
     serve_static("/lib/zoom", file, remote_addr).await
 }
 
 pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Response {
+    #[inline]
     fn ext(file_name: &str) -> Option<&str> {
         if !file_name.contains(".") {
             return None;
@@ -153,7 +148,6 @@ pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Re
     static_file_response(&format!("{path}/{file}"), content_type, remote_addr).await
 }
 
-
 async fn static_file_response(
     path: &str,
     content_type: ContentType,
@@ -174,16 +168,15 @@ async fn static_file_response(
     }
 
     match read_static(path, remote_addr).await {
-        Some(bytes) => Response {
-            status: Status::Ok,
-            content: bytes,
-            content_type: content_type,
-        },
-        None => Response {
-            status: Status::NotFound,
-            content: Vec::new(),
-            content_type: ContentType::Any,
-        },
+        Some(bytes) => ResponseBuilder::default()
+            .with_status(Status::Ok)
+            .with_content(bytes)
+            .with_content_type(content_type).build(),
+        None => {
+            return ResponseBuilder::default()
+                .with_status(Status::NotFound)
+                .build()
+        }
     }
 }
 
