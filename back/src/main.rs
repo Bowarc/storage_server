@@ -43,10 +43,8 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
                 routes::static_lib_zoom,
                 routes::favicon_ico,
                 routes::api_upload,
-                // routes::api_upload_put,
                 routes::api_download,
-                routes::api_download_get,
-                routes::api_download_get_proxy,
+                routes::api_download_filename,
                 routes::api_download_head,
             ],
         ).ignite().await.unwrap();
