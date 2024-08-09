@@ -1,23 +1,29 @@
-use rocket::{http::Status, serde::json::serde_json::json};
+use rocket::{
+    http::{ContentType, Status},
+    serde::json::serde_json::json,
+};
 
 #[rocket::catch(400)]
-pub async fn upload_400(_req: &rocket::Request<'_>) -> crate::response::JsonApiResponse {
-    crate::response::JsonApiResponseBuilder::default()
-        .with_json(json!({"status": 400, "message": "Could not understand the given data."}))
-        .with_status(Status::BadRequest)
+pub fn upload_400(_req: &rocket::Request<'_>) -> crate::response::Response {
+    crate::response::ResponseBuilder::default()
+        .with_status(Status::PayloadTooLarge)
+        .with_content("Could not understand the given data.")
+        .with_content_type(ContentType::Text)
         .build()
 }
 
 #[rocket::catch(413)]
-pub async fn upload_413(_req: &rocket::Request<'_>) -> crate::response::JsonApiResponse {
-    info!("Sending reponse");
-    crate::response::JsonApiResponseBuilder::default()
-        .with_json(json!({"status": 413, "message": format!("Data too large, {} max", unsafe{crate::JSON_REQ_LIMIT})}))
-        .with_status(Status::BadRequest)
+pub fn upload_413(_req: &rocket::Request<'_>) -> crate::response::Response {
+    crate::response::ResponseBuilder::default()
+        .with_status(Status::PayloadTooLarge)
+        .with_content(format!("Data too large, {} max", unsafe {
+            crate::FILE_REQ_SIZE_LIMIT
+        }))
+        .with_content_type(ContentType::Text)
         .build()
 }
 
 #[rocket::catch(403)]
-pub async fn root_403() -> String {
+pub fn root_403() -> String {
     "403".to_string()
 }

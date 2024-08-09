@@ -19,11 +19,11 @@ cli_colors = false
 [default.limits]
 bytes = "0 B"
 data-form = "0 B"
-file = "0 B"
+file = "70 MiB" # 50 kb data + 33% base64 + 3.5mb space for additional data and others
 form = "0 B"
 msgpack = "0 B"
 string = "0 B"
-json = "70 MiB" # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
+json = "0 B"
 
 
 # ## set only when compiled in debug mode, i.e, `cargo build`

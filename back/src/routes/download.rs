@@ -1,5 +1,3 @@
-use crate::response;
-
 lazy_static! {
     // This regex only match uuid v4
     static ref UUID_VALIDATION_REGEX: regex::Regex = regex::Regex::new(
