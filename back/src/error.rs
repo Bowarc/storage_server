@@ -30,3 +30,11 @@ pub enum CacheError {
     #[error("Could not deserialize")]
     Deserialization,
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum UuidParseError {
+    #[error("Failled the regex check")]
+    Regex,
+    #[error("Failled the regex check")]
+    Convert,
+}

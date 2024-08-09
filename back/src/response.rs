@@ -3,6 +3,99 @@ use rocket::{
     serde::json::serde_json::{json, Value as JsonValue},
 };
 
+pub struct Response {
+    status: Status,
+    headers: std::collections::HashMap<String, String>,
+    content: Vec<u8>,
+    content_type: rocket::http::ContentType,
+}
+
+impl Response{
+    pub fn status(&self) -> &Status{
+        &self.status
+    }
+
+    pub fn headers(&self) -> &std::collections::HashMap<String, String>{
+        &self.headers
+    }
+
+    pub fn content(&self) -> &Vec<u8>{
+        &self.content
+    }
+
+    pub fn content_type(&self) -> &ContentType{
+        &self.content_type
+    }
+}
+
+impl<'r> rocket::response::Responder<'r, 'static> for Response {
+    fn respond_to(self, _: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        let mut resp = rocket::response::Builder::new(rocket::Response::default());
+
+        resp.status(self.status);
+
+        resp.raw_header("Content-Type", self.content_type.to_string());
+
+        for (name, value) in self.headers {
+            resp.raw_header(name, value);
+        }
+
+
+        resp.sized_body(self.content.len(), std::io::Cursor::new(self.content));
+
+        resp.ok()
+    }
+}
+
+pub struct ResponseBuilder {
+    inner: Response,
+}
+
+impl ResponseBuilder {
+    pub fn from_response(response: Response) -> Self {
+        Self { inner: response }
+    }
+
+    pub fn with_content(mut self, value: impl Into<Vec<u8>>) -> Self {
+        self.inner.content = value.into();
+        self
+    }
+
+    pub fn with_content_type(mut self, ctype /*C TYPE badeu :D*/: ContentType) -> Self {
+        self.inner.content_type = ctype;
+        self
+    }
+
+    pub fn with_status(mut self, status: Status) -> Self {
+        self.inner.status = status;
+        self
+    }
+
+    pub fn with_header(mut self, name: &str, value: &str) -> Self {
+        self.inner
+            .headers
+            .insert(name.to_string(), value.to_string());
+        self
+    }
+
+    pub fn build(self) -> Response {
+        self.inner
+    }
+}
+
+impl Default for ResponseBuilder {
+    fn default() -> Self {
+        ResponseBuilder {
+            inner: Response {
+                status: Status::Ok,
+                headers: std::collections::HashMap::new(),
+                content: Vec::new(),
+                content_type: ContentType::Any,
+            },
+        }
+    }
+}
+
 pub struct JsonApiResponse {
     json: JsonValue,
     status: Status,
@@ -64,76 +157,6 @@ impl Default for JsonApiResponseBuilder {
                     h.insert("Content-Type".to_string(), "application/json".to_string());
                     h
                 },
-            },
-        }
-    }
-}
-
-pub struct Response {
-    status: Status,
-    headers: std::collections::HashMap<String, String>,
-    content: Vec<u8>,
-    content_type: rocket::http::ContentType,
-}
-
-impl<'r> rocket::response::Responder<'r, 'static> for Response {
-    fn respond_to(self, _: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
-
-        let mut resp = rocket::response::Builder::new(rocket::Response::default());
-
-        resp.status(self.status);
-
-        for (name, value) in self.headers {
-            resp.raw_header(name, value);
-        }
-
-        resp.sized_body(self.content.len(), std::io::Cursor::new(self.content));
-
-        resp.ok()
-
-    }
-}
-
-pub struct ResponseBuilder {
-    inner: Response,
-}
-
-impl ResponseBuilder {
-    pub fn with_content(mut self, value: impl Into<Vec<u8>> ) -> Self {
-        self.inner.content = value.into();
-        self
-    }
-
-    pub fn with_content_type(mut self, ctype /*C TYPE badeu :D*/: ContentType ) -> Self {
-        self.inner.content_type = ctype;
-        self
-    }
-
-    pub fn with_status(mut self, status: Status) -> Self {
-        self.inner.status = status;
-        self
-    }
-
-    pub fn with_header(mut self, name: &str, value: &str) -> Self {
-        self.inner
-            .headers
-            .insert(name.to_string(), value.to_string());
-        self
-    }
-
-    pub fn build(self) -> Response {
-        self.inner
-    }
-}
-
-impl Default for ResponseBuilder {
-    fn default() -> Self {
-        ResponseBuilder {
-            inner: Response {
-                status: Status::Ok,
-                headers: std::collections::HashMap::new(),
-                content: Vec::new(),
-                content_type: ContentType::Any,
             },
         }
     }

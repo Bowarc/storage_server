@@ -1,128 +1,190 @@
-use rocket::{http::ContentType, response::Redirect, tokio::io::AsyncReadExt, uri};
-use uuid::Uuid;
-
-use crate::response::{Response, ResponseBuilder};
-
-use {
-    crate::response::{JsonApiResponse, JsonApiResponseBuilder},
-    rocket::{http::Status, serde::json::serde_json::json},
-    std::str::FromStr,
-};
+use crate::response;
 
 lazy_static! {
-    static ref EXTENSION_VALIDATION_REGEX: regex::Regex =
-        regex::Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap();
+    // This regex only match uuid v4
+    static ref UUID_VALIDATION_REGEX: regex::Regex = regex::Regex::new(
+        r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    )
+    .unwrap();
 }
 
-#[rocket::get("/api/download/<id>")]
+fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError> {
+    use {crate::error::UuidParseError, std::str::FromStr, uuid::Uuid};
+
+    if !UUID_VALIDATION_REGEX.is_match(raw_id) {
+        return Err(UuidParseError::Regex);
+    }
+
+    Uuid::from_str(raw_id).map_err(|_e| UuidParseError::Convert)
+}
+
+///
+/// This route is the main way to download a cache's content
+///
+///     As input, it only requires the cache's uuid
+///
+///     It returns, file cache's content, decompressed and in an directly usable format.
+///         As for the filename, it sets the 'Content-Disposition' header for the browser to interpret
+///
+#[rocket::get("/<id>")]
 pub async fn api_download(
     id: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
-) -> JsonApiResponse {
-    debug!("Download request of: {id}");
-
-    // Only contains numbers, lowercase letters or dashes
-    if !EXTENSION_VALIDATION_REGEX.is_match(&id) {
-        error!("Given id doesn't match expected character range");
-        return JsonApiResponseBuilder::default()
-            .with_status(Status::BadRequest)
-            .with_json(json!({
-                "result": "denied",
-                "message": "Given id doesn't match expected character range"
-            }))
-            .build();
-    }
-
-    let Ok(id) = uuid::Uuid::from_str(id) else {
-        error!("Invalid id: {id}");
-        return JsonApiResponseBuilder::default()
-            .with_json(json!( {
-                "result": "denied",
-                "message": format!("Invalid id: {id}")
-            }))
-            .with_status(Status::BadRequest)
-            .build();
+) -> crate::response::Response {
+    use {
+        crate::{
+            error::{CacheError, UuidParseError},
+            response::ResponseBuilder,
+        },
+        rocket::http::{ContentType, Status},
+        std::time::Instant,
     };
-    let (meta, data) = match cache.read().await.load(id).await {
-        Ok(meta_data) => meta_data,
-        Err(e) => {
-            error!("[{id}] Could not load cache due to: {e}");
-            return JsonApiResponseBuilder::default()
-                .with_json(json!({
-                    "result": "failled",
-                    "message": format!("Id not found")
-                }))
+
+    let start_timer = Instant::now();
+
+    info!("Request of {id}");
+
+    let uuid = match parse_id(id) {
+        Ok(uuid) => uuid,
+        Err(UuidParseError::Regex) => {
+            error!("[{id}] Given id doesn't match expected character range");
+            return ResponseBuilder::default()
                 .with_status(Status::BadRequest)
+                .with_content("Given id doesn't match expected character range")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+        Err(UuidParseError::Convert) => {
+            error!("[{id}] Invalid id");
+            return ResponseBuilder::default()
+                .with_status(Status::BadRequest)
+                .with_content(format!("Invalid id: {id}"))
+                .with_content_type(ContentType::Text)
                 .build();
         }
     };
 
-    // let data_b64 = String::from_utf8(data).unwrap();
-    let data_b64 = rbase64::encode(&data);
+    let cache_handle = cache.read().await;
 
-    JsonApiResponseBuilder::default()
-        .with_json(json!({
-            "metadata": meta,
-            "file": data_b64
-        }))
-        .with_status(Status::Ok)
-        .build()
-}
+    let (meta, data) = match cache_handle.load(uuid).await {
+        Ok(meta_data) => meta_data,
+        Err(CacheError::NotFound) => {
+            error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
+            return ResponseBuilder::default()
+                .with_status(Status::NotFound)
+                .with_content("The given id doesn't correspond to any cache entry")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+        Err(CacheError::FileOpen(e)) => {
+            error!("[{uuid}] Failled to open data file of [{uuid}] due to: {e}");
+            return ResponseBuilder::default()
+                .with_status(Status::InternalServerError)
+                .with_content("Could not acces given id's content")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+        Err(CacheError::FileRead(e)) => {
+            error!("[{uuid}] Failled to read cache of [{uuid}] due to: {e}");
+            return ResponseBuilder::default()
+                .with_status(Status::InternalServerError)
+                .with_content("Could not access given cache entry")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+        Err(e) => {
+            error!("[{uuid}] Unexpected error: {e}");
+            return ResponseBuilder::default()
+                .with_status(Status::InternalServerError)
+                .with_content("Could not access the requested cache. The error has been logged.")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+    };
 
-#[rocket::get("/<id>")]
-pub async fn api_download_get_proxy(
-    id: &str,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
-) -> rocket::response::Redirect {
-    info!("Proxy request of {id}");
-
-    let uuid = Uuid::from_str(id).unwrap();
-
-    let meta = cache.write().await.get_meta(uuid).await.unwrap();
-
-    let filename = format!("{}.{}", meta.file_name, meta.file_ext);
-    info!("Redirecting to {filename}");
-
-    Redirect::to(uri!(api_download_get(id, filename)))
-}
-
-#[rocket::get("/<id>/<filename>")]
-pub async fn api_download_get(
-    id: &str,
-    filename: &str,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
-) -> Response {
-    info!("Request of {id} w/ filename: {filename}");
-
-    let uuid = Uuid::from_str(id).unwrap();
-
-    let (meta, data) = cache.write().await.load(uuid).await.unwrap();
-
-    if &format!("{}.{}", meta.file_name, meta.file_ext) != filename {
-        return ResponseBuilder::default()
-            .with_status(Status::BadRequest)
-            .with_content(format!(
-                "The given filename is not correct, did you meant {}.{}?",
-                meta.file_name, meta.file_ext
-            ))
-            .with_content_type(ContentType::Plain)
-            .build();
-    }
+    info!(
+        "[{uuid}] Responded in {}",
+        time::format(start_timer.elapsed(), 2)
+    );
 
     ResponseBuilder::default()
         .with_status(Status::Ok)
         .with_content(data)
-        .with_content_type(ContentType::Bytes).build()
+        .with_content_type(ContentType::Bytes)
+        .with_header(
+            "Content-Disposition",
+            &format!(
+                "attachment; filename=\"{}.{}\"",
+                meta.file_name, meta.file_ext
+            ),
+        )
+        .build()
 }
+
+///
+/// This route is the seccond way to download a cache's content
+///
+///     As input, it requires the cache's uuid and the file name to be the right one
+///
+///     It returns, file cache's content, decompressed and in an directly usable format.
+///
+///     This route is a proxy and mostly for curl users to be able to use '-O' (download with auto file name)
+///
+#[rocket::get("/<id>/<filename>")]
+pub async fn api_download_filename(
+    id: &str,
+    filename: &str,
+    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+) -> crate::response::Response {
+    use {
+        crate::response::ResponseBuilder,
+        rocket::http::{ContentType, Status},
+    };
+
+    let resp = api_download(id, cache).await;
+
+    if resp.status() != &Status::Ok {
+        // If the internal call returned an error, there is no point doing the filename verification
+        return resp;
+    }
+
+    let Some(content_disposition_header) = resp.headers().get("Content-Disposition") else {
+        error!("Could not find the 'Content-Disposition' header of the api_download internal call");
+        return ResponseBuilder::default()
+            .with_status(Status::InternalServerError)
+            .build();
+    };
+
+    // This won't truncate the real file name as quotes are not allowed in filename / extensions (see upload.rs::FILENAME_VALIDATION_REGEX)
+    let header_filename = content_disposition_header
+        .replace("attachment; filename=\"", "")
+        .replace('"', "");
+
+    if header_filename != filename {
+        error!("The user supplied filename: '{filename}' but the one stored in metadata is '{header_filename}'");
+        return ResponseBuilder::default()
+            .with_status(Status::BadRequest)
+            .with_content(format!(
+                "Incorrect file name, did you meant '{header_filename}'?"
+            ))
+            .with_content_type(ContentType::Text)
+            .build();
+    }
+
+    resp
+}
+
 #[rocket::head("/<id>")]
 pub async fn api_download_head(
     id: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
 ) -> String {
+    use {std::str::FromStr, uuid::Uuid};
+
     info!("Request of HEAD {id}");
     let uuid = Uuid::from_str(id).unwrap();
 
-    let meta = cache.write().await.get_meta(uuid).await.unwrap();
+    let meta = cache.read().await.get_meta(uuid).await.unwrap();
 
     format!("{}.{}", meta.file_name, meta.file_ext)
 }
@@ -136,7 +198,7 @@ mod tests {
     };
 
     #[rocket::async_test]
-    async fn test_download_proxy_GET() {
+    async fn test_download() {
         let base_filename = "test.file";
 
         let uuid = {
@@ -147,7 +209,58 @@ mod tests {
 
             let response = client
                 .put(format!("/{base_filename}"))
-                .header(rocket::http::ContentType::Plain)
+                .header(rocket::http::ContentType::Text)
+                .body("This is a cool file content")
+                .dispatch()
+                .await;
+
+            #[allow(deprecated)] // stfu ik
+            std::thread::sleep_ms(500);
+
+            assert_eq!(response.status(), Status::Created);
+
+            let rs = response.into_string().await.unwrap();
+
+            info!("{}", rs);
+
+            let suuid = rs.replace("Success: ", "");
+            let uuid = uuid::Uuid::from_str(&suuid).unwrap();
+            uuid
+        };
+
+        let client = Client::tracked(build_rocket().await)
+            .await
+            .expect("valid rocket instance");
+
+        let response = client
+            .get(format!("/{uuid}", uuid = uuid.hyphenated()))
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(
+            response.headers().get_one("Content-Disposition").unwrap(),
+            format!("attachment; filename=\"{base_filename}\"")
+        );
+    }
+
+    #[rocket::async_test]
+    async fn test_download_filename() {
+        let logcfg = logger::LoggerConfig::new()
+            .set_level(log::LevelFilter::Trace)
+            .add_filter("rocket", log::LevelFilter::Warn);
+        logger::init(logcfg, None);
+
+        let base_filename = "test.file";
+
+        let uuid = {
+            // Setup
+            let client = Client::tracked(build_rocket().await)
+                .await
+                .expect("valid rocket instance");
+            let response = client
+                .put(format!("/{base_filename}"))
+                .header(rocket::http::ContentType::Text)
                 .body("This is a co")
                 .dispatch()
                 .await;
@@ -170,49 +283,15 @@ mod tests {
             .expect("valid rocket instance");
 
         let response = client
-            .get(format!("/{uuid}", uuid = uuid.hyphenated()))
+            .get(format!("/{uuid}/{base_filename}", uuid = uuid.hyphenated()))
             .dispatch()
             .await;
 
-        assert_eq!(response.status(), Status::SeeOther); // Redirect
+        assert_eq!(response.status(), Status::Ok);
         assert_eq!(
-            response.headers().get_one("location").unwrap(),
-            format!("/{uuid}/{base_filename}")
+            response.headers().get_one("Content-Disposition").unwrap(),
+            format!("attachment; filename=\"{base_filename}\"")
         );
-    }
 
-    #[rocket::async_test]
-    async fn test_download_GET() {
-        let logcfg = logger::LoggerConfig::new()
-            .set_level(log::LevelFilter::Trace)
-            .add_filter("rocket", log::LevelFilter::Warn);
-        logger::init(logcfg, None);
-
-        let base_filename = "test.file";
-
-        let uuid = {
-            // Setup
-            let client = Client::tracked(build_rocket().await)
-                .await
-                .expect("valid rocket instance");
-            let response = client
-                .put(format!("/{base_filename}"))
-                .header(rocket::http::ContentType::Plain)
-                .body("This is a co")
-                .dispatch()
-                .await;
-
-            #[allow(deprecated)] // stfu ik
-            std::thread::sleep_ms(500);
-
-            assert_eq!(response.status(), Status::Created);
-            let suuid = response
-                .into_string()
-                .await
-                .unwrap()
-                .replace("Success: ", "");
-            let uuid = uuid::Uuid::from_str(&suuid).unwrap();
-            uuid
-        };
     }
 }

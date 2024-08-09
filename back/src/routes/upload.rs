@@ -8,7 +8,7 @@ use {
 };
 
 lazy_static! {
-    static ref EXTENSION_VALIDATION_REGEX: regex::Regex =
+    static ref FILENAME_VALIDATION_REGEX: regex::Regex =
         regex::Regex::new(r"^[A-Za-z0-9_.]{1,100}$").unwrap();
 }
 
@@ -21,11 +21,18 @@ pub async fn api_upload(
     use {std::time::Instant, uuid::Uuid};
     let start_timer = Instant::now();
 
-    let id = Uuid::new_v4();
-    let wait_store = true; // Probably betterto make this an endpoint like /api/upload/ and /api/upload/awaited/;
+    let uuid = Uuid::new_v4();
+    let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/;
+
+    debug!(
+        "Received new upload request \nUsing id: {uuid}\nUsername: {}\nFile name: {}",
+        "NO_USER",
+        filename,
+    );
 
     // Validation of user input
-    if !EXTENSION_VALIDATION_REGEX.is_match(&filename) {
+    if !FILENAME_VALIDATION_REGEX.is_match(&filename) {
+        error!("[{uuid}] The given filename doesn't match the validation regex");
         return ResponseBuilder::default()
             .with_status(Status::BadRequest)
             .with_content("The specified filename should only contain alphanumeric characters, underscores, dots and shouldn't be longer than 100 characters")
@@ -40,7 +47,7 @@ pub async fn api_upload(
     {
         Ok(data) => data,
         Err(e) => {
-            error!("[{id}] Could not parse given data: {e}");
+            error!("[{uuid}] Could not parse given data: {e}");
 
             return ResponseBuilder::default()
                 .with_status(Status::BadRequest)
@@ -61,19 +68,12 @@ pub async fn api_upload(
 
     let data = capped_data.to_vec();
 
-    debug!(
-        "Received new upload request on /json\nUsing id: {id}\nUsername: {}\nFile name: {}\nFile size: {}",
-        "NO_USER",
-        filename,
-        data.len()
-    );
-
     // No need to decode user input as it's not b64 encoded anymore
 
     let mut cache_handle = cache.write().await;
 
     let exec = cache_handle.store(
-        id,
+        uuid,
         shared::data::Metadata {
             username: "NO_USER".to_string(),
             file_name: get_file_name(filename).unwrap_or_default(),
@@ -86,14 +86,14 @@ pub async fn api_upload(
     drop(cache_handle);
 
     if wait_store {
-        debug!("[{id}] Waiting for cache to finish storing the data");
+        debug!("[{uuid}] Waiting for cache to finish storing the data");
 
         match exec.await {
             Ok(Ok(())) => {
                 // All good
             }
             Ok(Err(e)) => {
-                error!("[{id}] An error occured while storing the given data: {e}");
+                error!("[{uuid}] An error occured while storing the given data: {e}");
                 return ResponseBuilder::default()
                     .with_status(Status::InternalServerError)
                     .with_content("An error occured while caching the data")
@@ -101,7 +101,7 @@ pub async fn api_upload(
                     .build();
             }
             Err(join_error) => {
-                error!("[{id}] Something went really bad while waiting for worker task to end: {join_error}");
+                error!("[{uuid}] Something went really bad while waiting for worker task to end: {join_error}");
                 return ResponseBuilder::default()
                     .with_status(Status::InternalServerError)
                     .with_content("Worker failled")
@@ -112,12 +112,12 @@ pub async fn api_upload(
     }
 
     info!(
-        "[{id}] Responded in {}",
+        "[{uuid}] Responded in {}",
         time::format(start_timer.elapsed(), 2)
     );
     ResponseBuilder::default()
         .with_status(Status::Created)
-        .with_content(id.hyphenated().to_string())
+        .with_content(uuid.hyphenated().to_string())
         .with_content_type(ContentType::Text)
         .build()
 }
@@ -151,13 +151,13 @@ mod tests {
     };
 
     #[rocket::async_test]
-    async fn test_upload_PUT() {
+    async fn test_upload() {
         let client = Client::tracked(build_rocket().await)
             .await
             .expect("valid rocket instance");
         let response = client
             .put("/test.file")
-            .header(rocket::http::ContentType::Plain)
+            .header(rocket::http::ContentType::Text)
             .body("This is normal file content")
             .dispatch()
             .await;
