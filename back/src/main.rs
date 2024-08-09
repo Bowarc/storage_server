@@ -14,7 +14,7 @@ mod error;
 mod response;
 mod routes;
 
-static mut JSON_REQ_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
+static mut FILE_REQ_SIZE_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
 
 // Needed for tests
 pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
@@ -53,10 +53,10 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     // Safety:
     //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
     unsafe {
-        JSON_REQ_LIMIT = rocket
+        FILE_REQ_SIZE_LIMIT = rocket
             .config()
             .limits
-            .get("json")
+            .get("file")
             .expect("Failled to read the normal and default config")
     }
 

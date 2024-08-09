@@ -41,7 +41,7 @@ pub async fn api_upload(
     }
 
     let capped_data = match raw_data
-        .open(unsafe { crate::JSON_REQ_LIMIT })
+        .open(unsafe { crate::FILE_REQ_SIZE_LIMIT })
         .into_bytes()
         .await
     {
