@@ -24,11 +24,17 @@ pub enum CacheError {
     #[error("The given id doesn't correspond to any saved cache")]
     NotFound,
 
+    #[error("The given id's cache is not ready yet")]
+    NotReady,
+
     #[error("Could not serialize")]
     Serialization,
 
     #[error("Could not deserialize")]
     Deserialization,
+
+    #[error("The given id ({0}) could not be parsed into an uuid")]
+    InvalidId(String)
 }
 
 #[derive(Debug, thiserror::Error)]

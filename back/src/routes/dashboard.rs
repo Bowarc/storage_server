@@ -7,9 +7,9 @@ pub async fn _cache_list(
     let data = cache
         .read()
         .await
-        .data
+        .inner
         .iter()
-        .map(|cache_entry: &std::sync::Arc<shared::data::CacheEntry>| {
+        .map(|cache_entry: &std::sync::Arc<crate::cache::data::CacheEntry>| {
             rocket::serde::json::to_string(&**cache_entry).unwrap()
         })
         .collect::<Vec<String>>();

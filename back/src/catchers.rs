@@ -1,10 +1,7 @@
-use rocket::{
-    http::{ContentType, Status},
-    serde::json::serde_json::json,
-};
-
 #[rocket::catch(400)]
 pub fn upload_400(_req: &rocket::Request<'_>) -> crate::response::Response {
+    use rocket::http::{ContentType, Status};
+
     crate::response::ResponseBuilder::default()
         .with_status(Status::PayloadTooLarge)
         .with_content("Could not understand the given data.")
@@ -14,6 +11,8 @@ pub fn upload_400(_req: &rocket::Request<'_>) -> crate::response::Response {
 
 #[rocket::catch(413)]
 pub fn upload_413(_req: &rocket::Request<'_>) -> crate::response::Response {
+    use rocket::http::{ContentType, Status};
+
     crate::response::ResponseBuilder::default()
         .with_status(Status::PayloadTooLarge)
         .with_content(format!("Data too large, {} max", unsafe {
