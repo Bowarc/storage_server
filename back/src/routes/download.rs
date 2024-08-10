@@ -6,6 +6,7 @@ lazy_static! {
     .unwrap();
 }
 
+#[inline]
 fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError> {
     use {crate::error::UuidParseError, std::str::FromStr, uuid::Uuid};
 
@@ -64,8 +65,23 @@ pub async fn api_download(
 
     let cache_handle = cache.read().await;
 
-    let (meta, data) = match cache_handle.load(uuid).await {
+    let load_res = cache_handle.load(uuid).await;
+
+    // Keep the lock for the minimum amount of time
+    drop(cache_handle);
+
+    let (meta, data) = match load_res {
         Ok(meta_data) => meta_data,
+        Err(CacheError::NotReady) => {
+            error!("[{uuid}] The requested cache is not ready yet");
+
+            return ResponseBuilder::default()
+                .with_status(Status::NotFound)
+                .with_content("The requested cache is not ready yet")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+
         Err(CacheError::NotFound) => {
             error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
             return ResponseBuilder::default()
@@ -113,7 +129,8 @@ pub async fn api_download(
             "Content-Disposition",
             &format!(
                 "attachment; filename=\"{}.{}\"",
-                meta.file_name, meta.file_ext
+                meta.name(),
+                meta.extension()
             ),
         )
         .build()
@@ -182,9 +199,13 @@ pub async fn api_download_head(
     info!("Request of HEAD {id}");
     let uuid = Uuid::from_str(id).unwrap();
 
-    let meta = cache.read().await.get_meta(uuid).await.unwrap();
+    let upload_info = cache.read().await.get_entry(uuid).await.unwrap();
 
-    format!("{}.{}", meta.file_name, meta.file_ext)
+    format!(
+        "{}.{}",
+        upload_info.upload_info().name(),
+        upload_info.upload_info().extension()
+    )
 }
 
 #[cfg(test)]
@@ -290,6 +311,5 @@ mod tests {
             response.headers().get_one("Content-Disposition").unwrap(),
             format!("attachment; filename=\"{base_filename}\"")
         );
-
     }
 }

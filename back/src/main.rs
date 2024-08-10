@@ -47,8 +47,10 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
                 routes::api_download_filename,
                 routes::api_download_head,
             ],
-        ).ignite().await.unwrap();
-
+        )
+        .ignite()
+        .await
+        .unwrap();
 
     // Safety:
     //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched

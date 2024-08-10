@@ -1,15 +1,6 @@
-use rocket::http::ContentType;
-
-use crate::response::{Response, ResponseBuilder};
-
-use {
-    crate::response::{JsonApiResponse, JsonApiResponseBuilder},
-    rocket::{http::Status, serde::json::serde_json::json},
-};
-
 lazy_static! {
     static ref FILENAME_VALIDATION_REGEX: regex::Regex =
-        regex::Regex::new(r"^[A-Za-z0-9_.]{1,100}$").unwrap();
+        regex::Regex::new(r"^[A-Za-z0-9_.-]{1,100}$").unwrap();
 }
 
 #[rocket::put("/<filename>", data = "<raw_data>")]
@@ -17,8 +8,14 @@ pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
-) -> Response {
-    use {std::time::Instant, uuid::Uuid};
+) -> crate::response::Response {
+    use {
+        crate::response::ResponseBuilder,
+        rocket::http::{ContentType, Status},
+        std::time::Instant,
+        uuid::Uuid,
+    };
+
     let start_timer = Instant::now();
 
     let uuid = Uuid::new_v4();
@@ -26,8 +23,7 @@ pub async fn api_upload(
 
     debug!(
         "Received new upload request \nUsing id: {uuid}\nUsername: {}\nFile name: {}",
-        "NO_USER",
-        filename,
+        "NO_USER", filename,
     );
 
     // Validation of user input
@@ -74,11 +70,11 @@ pub async fn api_upload(
 
     let exec = cache_handle.store(
         uuid,
-        shared::data::Metadata {
-            username: "NO_USER".to_string(),
-            file_name: get_file_name(filename).unwrap_or_default(),
-            file_ext: get_file_extension(filename).unwrap_or_default(),
-        },
+        crate::cache::data::UploadInfo::new(
+            "NO_USER".to_string(),
+            get_file_name(filename).unwrap_or_default(),
+            get_file_extension(filename).unwrap_or_default(),
+        ),
         data,
     );
 
