@@ -1,4 +1,2 @@
 mod notification;
-pub use notification::{
-    NotificationManager, Notification, push_notification
-};
+pub use notification::{push_notification, Notification, NotificationManager};
