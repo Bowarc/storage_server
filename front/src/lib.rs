@@ -15,7 +15,7 @@ pub enum Message {
 pub enum Scene {
     Home,
     Upload,
-    Download,
+    // Download,
     Contact,
 }
 
@@ -50,7 +50,7 @@ impl Component for App {
                     <img src="resources/github.webp" alt="Github icon" class="icon"/>
                 </a>
                 <div id="scene_list" class="header_item">{
-                    [ Scene::Home, Scene::Upload, Scene::Download, Scene::Contact ].iter().map(|scene|{
+                    [ Scene::Home, Scene::Upload, Scene::Contact ].iter().map(|scene|{
                         html!{
                             <button class={format!("scene_button{}", if &self.current_scene == scene {" current"} else{""})} onclick={ctx.link().callback(|_| Message::SwitchScene(*scene))}>
                                 { format!("{scene}") }
@@ -78,7 +78,7 @@ impl Scene {
         match self {
             Scene::Home => html! {<><scene::Home /></>},
             Scene::Upload => html! {<><scene::Upload /></>},
-            Scene::Download => html! {<><scene::Download /></>},
+            // Scene::Download => html! {<><scene::Download /></>},
             Scene::Contact => html! {<><scene::Contact /></>},
         }
     }
@@ -89,7 +89,7 @@ impl std::fmt::Display for Scene {
         match self {
             Scene::Home => write!(f, "Home"),
             Scene::Upload => write!(f, "Upload"),
-            Scene::Download => write!(f, "Download"),
+            // Scene::Download => write!(f, "Download"),
             Scene::Contact => write!(f, "Contact"),
         }
     }

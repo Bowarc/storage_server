@@ -1,21 +1,18 @@
 use {
-    crate::component,
-    base64::{engine::general_purpose::STANDARD, Engine},
+    // crate::component,
     gloo::{
         console::log,
-        file::{callbacks::FileReader, File as GlooFile},
+        // file::{callbacks::FileReader, File as GlooFile},
     },
-    std::{collections::HashMap, sync::atomic::{AtomicU32, Ordering}},
 };
 
-static CURRENT_ID: AtomicU32 = AtomicU32::new(0);
+static CURRENT_LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
 
-fn new_id() -> u32 {
-    let id = CURRENT_ID.load(Ordering::Relaxed);
-    CURRENT_ID.store(id+1, Ordering::Relaxed);
+fn new_local_id() -> u32 {
+    use std::sync::atomic::Ordering;
 
-    id
+    CURRENT_LOCAL_ID.fetch_add(1, Ordering::AcqRel)
 }
 
 #[derive(PartialEq)]
@@ -23,26 +20,36 @@ enum FileState {
     Loading,
     Local,
     Uploading,
-    Uploaded(String),
+    Uploaded(uuid::Uuid),
     UploadError(String),
 }
 
 struct UserFile {
-    id: u32,
+    local_id: u32,
     name: String,
     file_type: String,
-    data64: Option<String>, // Encoded to base64
+    data64: Option<Vec<u8>>, // Encoded to base64
     state: FileState,
 }
 
 pub enum Message {
-    Load(Vec<GlooFile>),
-    Loaded { id: u32, data: Vec<u8> },
+    Load(Vec<gloo::file::File>),
+    Loaded {
+        local_id: u32,
+        data: Vec<u8>,
+    },
     Upload,
-    Uploaded { id: u32, upload_id: String },
-    UploadError { id: u32, error: String },
-
-    RemoveLocal { id: u32 },
+    Uploaded {
+        local_id: u32,
+        upload_uuid: uuid::Uuid,
+    },
+    UploadError {
+        local_id: u32,
+        error: String,
+    },
+    RemoveLocal {
+        local_id: u32,
+    },
 }
 
 #[derive(serde::Deserialize)]
@@ -52,7 +59,7 @@ struct UploadData {
 }
 
 pub struct Upload {
-    readers: HashMap<u32, FileReader>,
+    readers: std::collections::HashMap<u32, gloo::file::callbacks::FileReader>,
     files: Vec<UserFile>,
 }
 
@@ -62,19 +69,21 @@ impl yew::Component for Upload {
 
     fn create(_ctx: &yew::Context<Self>) -> Self {
         Self {
-            readers: HashMap::default(),
+            readers: std::collections::HashMap::default(),
             files: Vec::default(),
         }
     }
 
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
+        use {crate::component, gloo::file::callbacks};
+
         match msg {
             Message::Load(files) => {
                 for file in files.into_iter() {
-                    let id = new_id();
+                    let local_id = new_local_id();
 
                     self.files.push(UserFile {
-                        id,
+                        local_id,
                         data64: None,
                         name: file.name(),
                         file_type: file.raw_mime_type(),
@@ -83,26 +92,26 @@ impl yew::Component for Upload {
 
                     let link = ctx.link().clone();
 
-                    let task = gloo::file::callbacks::read_as_bytes(&file, move |res| {
+                    let task = callbacks::read_as_bytes(&file, move |res| {
                         link.send_message(Message::Loaded {
-                            id,
+                            local_id,
                             data: res.expect("failed to read file"),
                         })
                     });
 
-                    self.readers.insert(id, task);
+                    self.readers.insert(local_id, task);
                 }
                 true
             }
-            Message::Loaded { id, data } => {
-                self.readers.remove(&id);
+            Message::Loaded { local_id, data } => {
+                self.readers.remove(&local_id);
 
-                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
-                    log!(format!("[Error] Could not get file ({id}) from list"));
-                    crate::component::push_notification(crate::component::Notification::error(
+                let Some(file) = self.files.iter_mut().find(|f| f.local_id == local_id) else {
+                    log!(format!("[Error] Could not get file ({local_id}) from list"));
+                    component::push_notification(crate::component::Notification::error(
                         "Internal error",
                         vec![&format!(
-                            "Could not find file with id {id} in local file list."
+                            "Could not find file with id {local_id} in local file list."
                         )],
                         5.,
                     ));
@@ -112,7 +121,7 @@ impl yew::Component for Upload {
                 let data_size = data.len();
 
                 if data_size > SIZE_LIMIT_BYTES {
-                    crate::component::push_notification(crate::component::Notification::error(
+                    component::push_notification(component::Notification::error(
                         "File too large",
                         vec![
                             &format!("File: {}", file.name),
@@ -124,11 +133,11 @@ impl yew::Component for Upload {
                         ],
                         5.,
                     ));
-                    self.files.retain(|f| f.id != id);
+                    self.files.retain(|f| f.local_id != local_id);
                     return true;
                 }
 
-                file.data64 = Some(STANDARD.encode(data));
+                file.data64 = Some(data);
                 file.state = FileState::Local;
 
                 {
@@ -145,78 +154,136 @@ impl yew::Component for Upload {
                 true
             }
             Message::Upload => {
-                use gloo::utils::format::JsValueSerdeExt as _;
+                use std::str::FromStr as _;
 
                 let mut count = 0;
 
                 for file in self.files.iter_mut() {
-                    let id = file.id;
+                    let local_id = file.local_id;
                     if file.state != FileState::Local {
-                        log!(format!("File ({id})'s state is not local"));
+                        log!(format!("File ({local_id})'s state is not local"));
                         continue;
                     }
-                    let Some(data64) = file.data64.clone() else {
+                    let Some(data) = file.data64.clone() else {
                         // File not yet loaded
                         continue;
                     };
-                    let ext = file.extension().unwrap_or_default();
                     let name = file.name().unwrap_or_default();
+                    let ext = file.extension().unwrap_or_default();
 
                     file.state = FileState::Uploading;
                     count += 1;
 
-                    ctx.link().send_future(async move{
+                    ctx.link().send_future(async move {
                         use wasm_bindgen::JsCast as _;
                         let mut reqinit = {
                             let mut r = web_sys::RequestInit::new();
-                            r.method("POST");
+                            r.method("PUT");
                             r.mode(web_sys::RequestMode::Cors);
                             r
                         };
 
-                        reqinit.body(Some(&wasm_bindgen::JsValue::from_str(
-                            &format!("{{\"metadata\": {{\"username\": \"TestUser\",\"file_name\": \"{name}\", \"file_ext\": \"{ext}\"}},\"file\": \"{data64}\"}}"),
-                        )));
+                        //
+                        //  Safety:
+                        //      The original data won't be accessed before that object is destroyed
+                        //
+                        let data_uint8_array = unsafe { js_sys::Uint8Array::view(&data) };
 
-                        let request = match web_sys::Request::new_with_str_and_init("/api/upload", &reqinit){
+                        reqinit.body(Some(&data_uint8_array));
+
+                        let request = match web_sys::Request::new_with_str_and_init(
+                            &format!("/{name}.{ext}"),
+                            &reqinit,
+                        ) {
                             Ok(request) => request,
-                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to retrieve the error: {e:?}"))},
+                            Err(e) => {
+                                return Message::UploadError {
+                                    local_id,
+                                    error: e
+                                        .as_string()
+                                        .unwrap_or(format!("Unable to retrieve the error: {e:?}")),
+                                }
+                            }
                         };
 
-                        request
-                            .headers()
-                            .set("Content-Type", "application/json")
-                            .unwrap();
-
                         let window = gloo::utils::window();
-                        let resp_value = match wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await{
+                        let resp_value = match wasm_bindgen_futures::JsFuture::from(
+                            window.fetch_with_request(&request),
+                        )
+                        .await
+                        {
                             Ok(resp_value) => resp_value,
-                            Err(e) =>  return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to receive the response due to: {e:?}"))},
+                            Err(e) => {
+                                return Message::UploadError {
+                                    local_id,
+                                    error: e.as_string().unwrap_or(format!(
+                                        "Unable to receive the response due to: {e:?}"
+                                    )),
+                                }
+                            }
                         };
                         let resp: web_sys::Response = match resp_value.dyn_into() {
                             Ok(response) => response,
-                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read the response due to: {e:?}"))},
+                            Err(e) => {
+                                return Message::UploadError {
+                                    local_id,
+                                    error: e.as_string().unwrap_or(format!(
+                                        "Unable to read the response due to: {e:?}"
+                                    )),
+                                }
+                            }
                         };
 
-                        let resp_json = match  resp.json()  {
-                            Ok(resp_json) => resp_json,
-                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to parse the response due to: {e:?}"))},
+                        if !resp.ok() {
+                            return Message::UploadError {
+                                local_id,
+                                error: format!(
+                                    "Response error with status: {:?}",
+                                    resp.status_text()
+                                ),
+                            };
+                        }
+
+                        let Ok(resp_text_promise) = resp.text() else {
+                            return Message::UploadError {
+                                local_id,
+                                error: format!("Could not get text"),
+                            };
                         };
 
-                        let json_data = match  wasm_bindgen_futures::JsFuture::from(resp_json).await{
-                            Ok(json_data) => json_data,
-                            Err(e) => return Message::UploadError{id, error: e.as_string().unwrap_or(format!("Unable to read response data due to: {e:?}"))},
+                        let resp_text_value =
+                            match wasm_bindgen_futures::JsFuture::from(resp_text_promise).await {
+                                Ok(resp_text_value) => resp_text_value,
+                                Err(e) => {
+                                    return Message::UploadError {
+                                        local_id,
+                                        error: e.as_string().unwrap_or_else(|| {
+                                            format!("Failed to read response body: {:?}", e)
+                                        }),
+                                    };
+                                }
+                            };
+
+                        let Some(resp_text) = resp_text_value.as_string() else {
+                            return Message::UploadError {
+                                local_id,
+                                error: format!("Could not parse received id"),
+                            };
                         };
 
-                        log!(format!("Response: {json_data:?}"));
+                        let Ok(uuid) = uuid::Uuid::from_str(&resp_text) else {
+                            return Message::UploadError {
+                                local_id,
+                                error: format!("Could not parse received id into a uuid"),
+                            };
+                        };
 
-                        let data = json_data
-                            .into_serde::<UploadData>()
-                            .unwrap();
+                        log!(format!("Response: {uuid:?}"));
 
-                        let upload_id = data.id.clone();
-
-                        Message::Uploaded{id, upload_id}
+                        Message::Uploaded {
+                            local_id,
+                            upload_uuid: uuid,
+                        }
                     });
                 }
 
@@ -228,15 +295,18 @@ impl yew::Component for Upload {
 
                 true
             }
-            Message::Uploaded { id, upload_id } => {
-                log!(format!("Succesfully uploaded with id: {id}"));
+            Message::Uploaded {
+                local_id,
+                upload_uuid,
+            } => {
+                log!(format!("Succesfully uploaded with id: {local_id}"));
 
-                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
-                    log!(format!("[Error] Could not get file ({id}) from list"));
+                let Some(file) = self.files.iter_mut().find(|f| f.local_id == local_id) else {
+                    log!(format!("[Error] Could not get file ({local_id}) from list"));
                     crate::component::push_notification(crate::component::Notification::error(
                         "Internal error",
                         vec![&format!(
-                            "Could not find file with id {id} in local file list."
+                            "Could not find file with id {local_id} in local file list."
                         )],
                         5.,
                     ));
@@ -247,20 +317,22 @@ impl yew::Component for Upload {
                     "Uploaded file",
                     vec![
                         &format!("File name: {}", file.name),
-                        &format!("Upload Id: {upload_id}"),
+                        &format!("Upload Uuid: {upload_uuid}"),
                     ],
                     5.,
                 ));
 
-                file.state = FileState::Uploaded(upload_id);
+                file.state = FileState::Uploaded(upload_uuid);
 
                 true
             }
-            Message::UploadError { id, error } => {
-                log!(format!("File ({id}) failled to upload due to: {error}"));
+            Message::UploadError { local_id, error } => {
+                log!(format!(
+                    "File ({local_id}) failled to upload due to: {error}"
+                ));
 
-                let Some(file) = self.files.iter_mut().find(|f| f.id == id) else {
-                    log!(format!("[Error] Could not get file ({id}) from list"));
+                let Some(file) = self.files.iter_mut().find(|f| f.local_id == local_id) else {
+                    log!(format!("[Error] Could not get file ({local_id}) from list"));
                     component::push_notification(component::Notification::error(
                         "Upload error",
                         vec![
@@ -282,8 +354,8 @@ impl yew::Component for Upload {
 
                 true
             }
-            Message::RemoveLocal { id } => {
-                let Some(file) = self.files.iter().find(|f| f.id == id) else {
+            Message::RemoveLocal { local_id } => {
+                let Some(file) = self.files.iter().find(|f| f.local_id == local_id) else {
                     crate::component::push_notification(crate::component::Notification::info(
                         "Error",
                         vec!["Could not find given file"],
@@ -298,7 +370,7 @@ impl yew::Component for Upload {
                     5.,
                 ));
 
-                self.files.retain(|f| f.id != id);
+                self.files.retain(|f| f.local_id != local_id);
                 true
             }
         }
@@ -341,7 +413,7 @@ impl yew::Component for Upload {
             <div>{
                 // .rev() Does fix the video issue see #13
                 for self.files.iter().map(|file: &UserFile|{
-                    let id = file.id;
+                    let local_id = file.local_id;
 
                     yew::html! {<div class="upload_file_preview">
                         <div class="upload_file_preview_img_bg"><img src="/resources/upload.png" /></div>
@@ -352,14 +424,14 @@ impl yew::Component for Upload {
                                     FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
                                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
                                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
-                                    FileState::Uploaded(id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {id}") }</p>},
+                                    FileState::Uploaded(local_id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {local_id}") }</p>},
                                     FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
                                 }
                             }
                         </div>
 
                         if matches!(file.state, FileState::Local) {
-                            <div class="upload_file_preview_delete_button_wrapper" onclick={ctx.link().callback(move |_| Message::RemoveLocal { id })}>
+                            <div class="upload_file_preview_delete_button_wrapper" onclick={ctx.link().callback(move |_| Message::RemoveLocal { local_id })}>
                                 <button class="upload_file_preview_delete_button">
                                     <img src="/resources/delete.png" />
                                 </button>
@@ -435,7 +507,7 @@ impl Upload {
                 .unwrap()
                 .unwrap()
                 .map(|v| web_sys::File::from(v.unwrap()))
-                .map(GlooFile::from);
+                .map(gloo::file::File::from);
             result.extend(files);
         }
         Message::Load(result)

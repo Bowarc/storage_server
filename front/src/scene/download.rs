@@ -1,5 +1,4 @@
 use {
-    base64::Engine,
     gloo::console::log,
     yew::{html, TargetCast as _},
 };
@@ -13,19 +12,6 @@ pub enum Message {
     StartDownload,
     DownloadFinished(DownloadData),
     DownloadFailled(String),
-}
-
-#[derive(serde::Deserialize)]
-pub struct DownloadData {
-    file: String,
-    metadata: DownloadMetaData,
-}
-
-#[derive(serde::Deserialize)]
-struct DownloadMetaData {
-    file_ext: String,
-    file_name: String,
-    username: String,
 }
 
 impl yew::Component for Download {
@@ -53,7 +39,7 @@ impl yew::Component for Download {
                 crate::component::push_notification(crate::component::Notification::info(
                     "Download start",
                     vec![&format!("Downloading {id}")],
-                    5.
+                    5.,
                 ));
 
                 ctx.link().send_future(async move {
@@ -67,7 +53,7 @@ impl yew::Component for Download {
                     };
 
                     let request = match web_sys::Request::new_with_str_and_init(
-                        &format!("/api/download/{id}"),
+                        &format!("/{id}"),
                         &reqinit,
                     ) {
                         Ok(request) => request,
@@ -166,12 +152,8 @@ impl yew::Component for Download {
                 true
             }
             Message::DownloadFinished(data) => {
-                use base64::engine::general_purpose::STANDARD;
                 use wasm_bindgen::JsCast as _;
                 log!(format!("Download finished, data size: {}", data.file.len()));
-                let mut buffer = Vec::new();
-
-                STANDARD.decode_vec(data.file, &mut buffer).unwrap();
 
                 let array = js_sys::Uint8Array::new_with_length(buffer.len() as u32);
                 array.copy_from(&buffer);
