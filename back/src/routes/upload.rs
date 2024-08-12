@@ -62,7 +62,8 @@ pub async fn api_upload(
             .build();
     }
 
-    let data = capped_data.to_vec();
+
+    let data = capped_data.value;
 
     // No need to decode user input as it's not b64 encoded anymore
 
