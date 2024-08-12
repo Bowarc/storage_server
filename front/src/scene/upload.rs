@@ -1,10 +1,4 @@
-use {
-    // crate::component,
-    gloo::{
-        console::log,
-        // file::{callbacks::FileReader, File as GlooFile},
-    },
-};
+use gloo::console::log;
 
 static CURRENT_LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
@@ -33,7 +27,8 @@ struct UserFile {
 }
 
 pub enum Message {
-    Load(Vec<gloo::file::File>),
+    Void,
+    Load(gloo::file::File),
     Loaded {
         local_id: u32,
         data: Vec<u8>,
@@ -50,12 +45,7 @@ pub enum Message {
     RemoveLocal {
         local_id: u32,
     },
-}
-
-#[derive(serde::Deserialize)]
-struct UploadData {
-    id: String,
-    result: String,
+    Error(String),
 }
 
 pub struct Upload {
@@ -78,29 +68,32 @@ impl yew::Component for Upload {
         use {crate::component, gloo::file::callbacks};
 
         match msg {
-            Message::Load(files) => {
-                for file in files.into_iter() {
-                    let local_id = new_local_id();
+            Message::Void => false,
+            Message::Load(file) => {
+                let local_id = new_local_id();
 
-                    self.files.push(UserFile {
-                        local_id,
-                        data64: None,
-                        name: file.name(),
-                        file_type: file.raw_mime_type(),
-                        state: FileState::Loading,
-                    });
+                self.files.push(UserFile {
+                    local_id,
+                    data64: None,
+                    name: file.name(),
+                    file_type: file.raw_mime_type(),
+                    state: FileState::Loading,
+                });
 
-                    let link = ctx.link().clone();
+                let link = ctx.link().clone();
 
-                    let task = callbacks::read_as_bytes(&file, move |res| {
-                        link.send_message(Message::Loaded {
-                            local_id,
-                            data: res.expect("failed to read file"),
-                        })
-                    });
+                let task = callbacks::read_as_bytes(&file, move |res| {
+                    let message = match res {
+                        Ok(data) => Message::Loaded { local_id, data },
+                        Err(e) => {
+                            Message::Error(format!("Could not load given file due to: {e:?}"))
+                        }
+                    };
 
-                    self.readers.insert(local_id, task);
-                }
+                    link.send_message(message)
+                });
+
+                self.readers.insert(local_id, task);
                 true
             }
             Message::Loaded { local_id, data } => {
@@ -373,6 +366,14 @@ impl yew::Component for Upload {
                 self.files.retain(|f| f.local_id != local_id);
                 true
             }
+            Message::Error(e) => {
+                crate::component::push_notification(crate::component::Notification::info(
+                    "An error occured",
+                    vec![&format!("{e}")],
+                    5.,
+                ));
+                true
+            }
         }
     }
 
@@ -385,7 +386,7 @@ impl yew::Component for Upload {
             </button>
             <label
                 class = "upload_dragdrop"
-                ondrop={ctx.link().callback(|event: yew::DragEvent| {
+                ondrop={ctx.link().batch_callback(|event: yew::DragEvent| {
                     event.prevent_default();
                     let files = event.data_transfer().unwrap().files();
                     Self::load_files(files)
@@ -401,7 +402,7 @@ impl yew::Component for Upload {
                     type="file"
                     accept="image/*,video/*"
                     multiple={true}
-                    onchange={ctx.link().callback(move |e: yew::Event| {
+                    onchange={ctx.link().batch_callback(move |e: yew::Event| {
                         let input: web_sys::HtmlInputElement = e.target_unchecked_into();
                         Self::load_files(input.files())
                     })}
@@ -499,18 +500,23 @@ impl Upload {
     //     </div>}
     // }
 
-    fn load_files(files: Option<web_sys::FileList>) -> Message {
-        let mut result = Vec::new();
+    fn load_files(input_files: Option<web_sys::FileList>) -> Vec<Message> {
+        let Some(files) = input_files else {
+            return vec![Message::Void];
+        };
 
-        if let Some(files) = files {
-            let files = js_sys::try_iter(&files)
-                .unwrap()
-                .unwrap()
-                .map(|v| web_sys::File::from(v.unwrap()))
-                .map(gloo::file::File::from);
-            result.extend(files);
-        }
-        Message::Load(result)
+        let Ok(Some(fileiter)) = js_sys::try_iter(&files) else {
+            return vec![Message::Error(
+                "Unable to create an iterator over given files".to_string(),
+            )];
+        };
+
+        fileiter
+            .map(|v| match v {
+                Ok(f) => Message::Load(gloo::file::File::from(web_sys::File::from(f))),
+                Err(e) => Message::Error(format!("{e:?}")),
+            })
+            .collect::<Vec<_>>()
     }
 }
 
