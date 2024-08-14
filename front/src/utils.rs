@@ -81,6 +81,82 @@ pub fn remove_script(id: &str) {
     }
 }
 
+pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> {
+    use wasm_bindgen::JsValue;
+
+    async fn method_1(text: &str) -> Result<(), JsValue>{
+        use wasm_bindgen::JsValue;
+        use web_sys::window;
+        let Some(window) = window() else{
+            return Err(JsValue::from("Could not copy requested content to clipboard due to: Could not get a handle to the window"));
+        };
+
+        // let Some(clipboard) = window.navigator().clipboard() else{
+        //     return Message::Error("Could not copy requested content to clipboard due to: Could not get a handle to the clipbard".to_string());
+        // };
+
+        let clipboard = window.navigator().clipboard();
+
+        if let Err(e) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await {
+            return Err(JsValue::from(&format!("Could not copy requested content to clipboard due to: {e:?}")));
+        }
+
+        Ok(())
+    }
+
+    fn method_2(text: &str) -> Result<(), JsValue>{
+        use wasm_bindgen::JsCast;
+        use wasm_bindgen::JsValue;
+        use web_sys::window;
+        use gloo::console::log;
+
+        let Some(window) = window()else{
+            return Err(JsValue::from("Could not get a handle to the window"))
+        };
+
+        log!("Got window");
+        let Some(document) = window.document() else{
+            return Err(JsValue::from("Could not get a handle to the window's document"))
+        };
+
+        let html_document: web_sys::HtmlDocument = document.dyn_into()?;
+        log!("Got document");
+
+        let Some(body) = html_document.body() else{
+            return Err(JsValue::from("Could not get a handle to the window's document's body"))
+        };
+
+        let text_area: web_sys::HtmlTextAreaElement =
+            html_document.create_element("textarea")?.dyn_into()?;
+        log!("Got text_area");
+
+        text_area.set_text_content(Some(text));
+
+        text_area.set_attribute("style", "position: fixed")?;
+        log!("text_area has content and attributes");
+
+        body.append_child(&text_area)?;
+        log!("text_area has been planted");
+
+        text_area.select();
+        log!("text_area has been selected");
+
+
+        if !html_document.exec_command("copy")? {
+            gloo::console::log!("hehe no");
+        }
+        log!("copy executed");
+
+        body.remove_child(&text_area)?;
+        log!("text_area: cleared");
+        Ok(())
+    }
+
+    // method_1(text).await
+    method_2(text)
+
+}
+
 // async fn fetch_dashboard(url: &'static str) -> Result<DashboardData, FetchError> {
 //     let mut opts = RequestInit::new();
 //     opts.method("GET");
