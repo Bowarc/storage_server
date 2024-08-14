@@ -61,7 +61,7 @@ impl Component for App {
             </div>
             <div id="content">
                 {
-                    self.current_scene.html()
+                    self.current_scene.html(ctx)
                 }
                 <component::NotificationManager />
             </div>
@@ -74,9 +74,12 @@ impl Component for App {
 }
 
 impl Scene {
-    fn html(&self) -> yew::virtual_dom::VNode {
+    fn html(&self, ctx: &Context<App>) -> yew::virtual_dom::VNode {
         match self {
-            Scene::Home => html! {<><scene::Home /></>},
+            Scene::Home => {
+                let on_clicked = ctx.link().callback(Message::SwitchScene);
+                html! {<><scene::Home {on_clicked} /></>}
+            }
             Scene::Upload => html! {<><scene::Upload /></>},
             // Scene::Download => html! {<><scene::Download /></>},
             Scene::Contact => html! {<><scene::Contact /></>},

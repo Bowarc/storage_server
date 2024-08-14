@@ -1,7 +1,8 @@
 use gloo::console::log;
 
 static CURRENT_LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
+// const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
+pub const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
 
 fn new_local_id() -> u32 {
     use std::sync::atomic::Ordering;
@@ -28,6 +29,8 @@ struct UserFile {
 
 pub enum Message {
     Void,
+    CopyToClipboard(String),
+    CopiedToClipboard(String),
     Load(gloo::file::File),
     Loaded {
         local_id: u32,
@@ -69,6 +72,25 @@ impl yew::Component for Upload {
 
         match msg {
             Message::Void => false,
+            Message::CopyToClipboard(text) => {
+                ctx.link().send_future(async {
+                    match crate::utils::copy_to_clipboard(&text).await {
+                        Ok(_) => Message::CopiedToClipboard(text),
+                        Err(e) => Message::Error(format!(
+                            "Could not copy requested content to clipboard due to: {e:?}"
+                        )),
+                    }
+                });
+                false
+            }
+            Message::CopiedToClipboard(content) => {
+                component::push_notification(crate::component::Notification::info(
+                    "Copied to clipboard",
+                    vec![&format!("A link to your file was copied to clipboard\nshare it to anyone to give them access !")],
+                    5.,
+                ));
+                true
+            }
             Message::Load(file) => {
                 let local_id = new_local_id();
 
@@ -169,12 +191,9 @@ impl yew::Component for Upload {
 
                     ctx.link().send_future(async move {
                         use wasm_bindgen::JsCast as _;
-                        let mut reqinit = {
-                            let mut r = web_sys::RequestInit::new();
-                            r.method("PUT");
-                            r.mode(web_sys::RequestMode::Cors);
-                            r
-                        };
+                        let reqinit = web_sys::RequestInit::new();
+                        reqinit.set_method("PUT");
+                        reqinit.set_mode(web_sys::RequestMode::Cors);
 
                         //
                         //  Safety:
@@ -182,7 +201,7 @@ impl yew::Component for Upload {
                         //
                         let data_uint8_array = unsafe { js_sys::Uint8Array::view(&data) };
 
-                        reqinit.body(Some(&data_uint8_array));
+                        reqinit.set_body(&data_uint8_array);
 
                         let request = match web_sys::Request::new_with_str_and_init(
                             &format!("/{name}.{ext}"),
@@ -367,7 +386,7 @@ impl yew::Component for Upload {
                 true
             }
             Message::Error(e) => {
-                crate::component::push_notification(crate::component::Notification::info(
+                crate::component::push_notification(crate::component::Notification::error(
                     "An error occured",
                     vec![&format!("{e}")],
                     5.,
@@ -425,7 +444,19 @@ impl yew::Component for Upload {
                                     FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
                                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
                                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
-                                    FileState::Uploaded(local_id) => yew::html!{ <p class="preview-state">{ format!("Uploaded with id: {local_id}") }</p>},
+                                    FileState::Uploaded(uuid) => {
+                                        let uuid = uuid.clone();
+                                            yew::html!{<>
+                                            <p class="preview-state">
+                                                { format!("Uploaded with id: {uuid}") }
+                                                <button onclick={
+                                                    ctx.link().callback(move |_|Message::CopyToClipboard(format!("http://192.168.1.39:42069/{uuid}")))}>{
+                                                    "Copy"
+                                                }</button>
+                                            </p>
+                                        </>
+                                    }
+                                },
                                     FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
                                 }
                             }
