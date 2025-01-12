@@ -3,3 +3,6 @@
 /log/*
 /tests/*
 /front/out/
+/temp
+/front/out
+/log
