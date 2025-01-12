@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 set -e
 
 RUST_LOG="walrus=error"

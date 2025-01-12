@@ -56,7 +56,7 @@ pub async fn favicon_ico(remote_addr: SocketAddr) -> Response {
 #[rocket::get("/resources/<file>")]
 pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
     #[rustfmt::skip]
-    const ALLOWED_FILES: &[&'static str] = &[
+    const ALLOWED_FILES: &[&str] = &[
         "bash.webp", "c.webp", "cpp.webp",
         "csharp.webp", "css.webp", "git.webp",
         "github.webp", "html.webp", "java.webp",
@@ -80,7 +80,7 @@ pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
 
 #[rocket::get("/css/<file>")]
 pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
-    const ALLOWED_FILES: &[&'static str] = &[
+    const ALLOWED_FILES: &[&str] = &[
         "contact.css",
         "home.css",
         "upload.css",
@@ -100,7 +100,7 @@ pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
 
 #[rocket::get("/lib/live/<file>")]
 pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
-    const ALLOWED_FILES: &[&'static str] = &["live.js"];
+    const ALLOWED_FILES: &[&str] = &["live.js"];
 
     if !ALLOWED_FILES.contains(&file) {
         return ResponseBuilder::default()
@@ -113,7 +113,7 @@ pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
 
 #[rocket::get("/lib/zoom/<file>")]
 pub async fn static_lib_zoom(file: &str, remote_addr: SocketAddr) -> Response {
-    const ALLOWED_FILES: &[&'static str] = &["zoom.js", "zoom.css"];
+    const ALLOWED_FILES: &[&str] = &["zoom.js", "zoom.css"];
 
     if !ALLOWED_FILES.contains(&file) {
         return ResponseBuilder::default()
@@ -143,7 +143,7 @@ pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Re
             ContentType::Any
         });
 
-    info!("Serving {path}/file w/ type: {content_type:?}");
+    info!("Serving {path}/{file} w/ type: {content_type:?}");
 
     static_file_response(&format!("{path}/{file}"), content_type, remote_addr).await
 }
@@ -173,7 +173,7 @@ async fn static_file_response(
             .with_content(bytes)
             .with_content_type(content_type).build(),
         None => {
-            return ResponseBuilder::default()
+            ResponseBuilder::default()
                 .with_status(Status::NotFound)
                 .build()
         }

@@ -1,9 +1,9 @@
 pub mod data;
 
 #[cfg(not(test))]
-const CACHE_DIRECTORY: &'static str = "./cache";
+const CACHE_DIRECTORY: &str = "./cache";
 #[cfg(test)]
-const CACHE_DIRECTORY: &'static str = "../cache"; // For some reason, tests launch path is ./back
+const CACHE_DIRECTORY: &str = "../cache"; // For some reason, tests launch path is ./back
 const COMPRESSION_LEVEL: i32 = 5; // 1..=11
 
 #[derive(Default)]
@@ -257,7 +257,7 @@ fn read_cache(
 
     Ok(Arc::new(CacheEntry::from_metadata(
         Uuid::from_str(id).map_err(|e| {
-            format!("Could not transform id '{id}' to a usable uuid due to: {e}");
+            error!("Could not transform id '{id}' to a usable uuid due to: {e}");
             CacheError::InvalidId(id.to_string())
         })?,
         metadata,
@@ -291,15 +291,13 @@ async fn create_files(
         (Ok(meta_file), Ok(data_file)) => Ok((meta_file, data_file)),
         (Ok(_f), Err(e)) => {
             remove_file(meta_path).await.unwrap();
-            return Err(e);
+            Err(e)
         }
         (Err(e), Ok(_f)) => {
             remove_file(data_path).await.unwrap();
-            return Err(e);
+            Err(e)
         }
-        (Err(de), Err(me)) => {
-            return Err(CacheError::FileCreate(format!("Data ({de})\nMeta ({me})")))
-        }
+        (Err(de), Err(me)) => Err(CacheError::FileCreate(format!("Data ({de})\nMeta ({me})"))),
     }
 }
 

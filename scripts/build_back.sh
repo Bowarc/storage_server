@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 mode=debug # debug, release
 

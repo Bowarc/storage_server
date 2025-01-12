@@ -97,7 +97,7 @@ pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> 
 
         let clipboard = window.navigator().clipboard();
 
-        if let Err(e) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await {
+        if let Err(e) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(text)).await {
             return Err(JsValue::from(&format!("Could not copy requested content to clipboard due to: {e:?}")));
         }
 
