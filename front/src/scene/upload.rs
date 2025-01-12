@@ -83,10 +83,10 @@ impl yew::Component for Upload {
                 });
                 false
             }
-            Message::CopiedToClipboard(content) => {
+            Message::CopiedToClipboard(_content) => {
                 component::push_notification(crate::component::Notification::info(
                     "Copied to clipboard",
-                    vec![&format!("A link to your file was copied to clipboard\nshare it to anyone to give them access !")],
+                    vec!["A link to your file was copied to clipboard\nshare it to anyone to give them access !"],
                     5.,
                 ));
                 true
@@ -97,7 +97,9 @@ impl yew::Component for Upload {
                 self.files.push(UserFile {
                     local_id,
                     data64: None,
-                    name: file.name(),
+                    // This isn't a security, as client side security are dumb imo,
+                    // this is just to make sure that the normal user can upload it's file without too much trouble
+                    name: file.name().replace([' ', '/', '\\', '\'', '’'], "_"),
                     file_type: file.raw_mime_type(),
                     state: FileState::Loading,
                 });
@@ -247,19 +249,33 @@ impl yew::Component for Upload {
                         };
 
                         if !resp.ok() {
-                            return Message::UploadError {
-                                local_id,
-                                error: format!(
-                                    "Response error with status: {:?}",
-                                    resp.status_text()
-                                ),
-                            };
+                            if let Ok(p) = resp.text().map(wasm_bindgen_futures::JsFuture::from) {
+                                return Message::UploadError {
+                                    local_id,
+                                    error: format!(
+                                        "Response error with status: {:?}\n{:?}",
+                                        resp.status_text(),
+                                        p.await
+                                            .unwrap_or(wasm_bindgen::JsValue::from(""))
+                                            .as_string()
+                                            .unwrap_or("".to_owned())
+                                    ),
+                                };
+                            } else {
+                                return Message::UploadError {
+                                    local_id,
+                                    error: format!(
+                                        "Response error with status: {:?}",
+                                        resp.status_text()
+                                    ),
+                                };
+                            }
                         }
 
                         let Ok(resp_text_promise) = resp.text() else {
                             return Message::UploadError {
                                 local_id,
-                                error: format!("Could not get text"),
+                                error: "Could not get text".to_string(),
                             };
                         };
 
@@ -279,14 +295,14 @@ impl yew::Component for Upload {
                         let Some(resp_text) = resp_text_value.as_string() else {
                             return Message::UploadError {
                                 local_id,
-                                error: format!("Could not parse received id"),
+                                error: "Could not parse received id".to_string(),
                             };
                         };
 
                         let Ok(uuid) = uuid::Uuid::from_str(&resp_text) else {
                             return Message::UploadError {
                                 local_id,
-                                error: format!("Could not parse received id into a uuid"),
+                                error: "Could not parse received id into a uuid".to_string(),
                             };
                         };
 
@@ -347,10 +363,7 @@ impl yew::Component for Upload {
                     log!(format!("[Error] Could not get file ({local_id}) from list"));
                     component::push_notification(component::Notification::error(
                         "Upload error",
-                        vec![
-                            &format!("File name: [ERROR] Unknown file"),
-                            &format!("{error}"),
-                        ],
+                        vec![&"File name: [ERROR] Unknown file", &error],
                         5.,
                     ));
                     return true;
@@ -358,7 +371,7 @@ impl yew::Component for Upload {
 
                 component::push_notification(component::Notification::error(
                     "Upload error",
-                    vec![&format!("File name: {}", file.name), &format!("{error}")],
+                    vec![&format!("File name: {}", file.name), &error],
                     10.,
                 ));
 
@@ -388,7 +401,7 @@ impl yew::Component for Upload {
             Message::Error(e) => {
                 crate::component::push_notification(crate::component::Notification::error(
                     "An error occured",
-                    vec![&format!("{e}")],
+                    vec![&e],
                     5.,
                 ));
                 true
@@ -445,8 +458,8 @@ impl yew::Component for Upload {
                                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
                                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
                                     FileState::Uploaded(uuid) => {
-                                        let uuid = uuid.clone();
-                                            yew::html!{<>
+                                        let uuid = *uuid;
+                                        yew::html!{<>
                                             <p class="preview-state">
                                                 { format!("Uploaded with id: {uuid}") }
                                                 <button onclick={

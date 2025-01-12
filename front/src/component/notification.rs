@@ -71,6 +71,8 @@ impl Notification {
     }
 
     fn render(&self) -> yew::Html {
+        const THRESHOLD: usize = 50;
+
         yew::html! {<div class={
                 format!(
                     "notification{}{}",
@@ -86,8 +88,23 @@ impl Notification {
             }</div>
             <div class="notification_content">{
                 for self.content.iter().map(|bit|{
+                    let bit = bit.chars().enumerate().map(|(i, s)| {
+                        // TODO: Fix this
+                        if i > THRESHOLD - 1 && i % THRESHOLD == 0 {
+                            format!("{s}\n")
+                        }else{
+                            String::from(s)
+                        }
+                    }).collect::<String>();
+
                     yew::html!{<>
-                        { bit }
+                        {
+                            bit.split("\n").map(String::from).map(|splitted| yew::html!{<>
+                                { splitted }
+                                <br />
+                                </>
+                            }).collect::<Vec<yew::Html>>()
+                        }
                         <br />
                     </>}
 

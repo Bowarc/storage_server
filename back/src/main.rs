@@ -67,10 +67,18 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
 
 #[rocket::main]
 async fn main() {
-    let logcfg = logger::LoggerConfig::new()
-        .set_level(log::LevelFilter::Trace)
-        .add_filter("rocket", log::LevelFilter::Warn);
-    logger::init(logcfg, Some("log/server.log"));
+    let filters = [("rocket", log::LevelFilter::Warn)];
+    logger::init([
+        logger::Config::default()
+            .output(logger::Output::Stdout)
+            .filters(&filters),
+        logger::Config::default()
+            .output(logger::Output::new_timed_file(
+                "./log/.log",
+                std::time::Duration::from_secs(86400), // A day
+            ))
+            .filters(&filters),
+    ]);
 
     // Small print to show the start of the program log in the file
     trace!(
@@ -149,14 +157,13 @@ fn display_config<'a>(
         .collect::<Vec<String>>();
 
     let display_vec = |data: Vec<String>| -> String {
+        use std::fmt::Write as _;
         let mut out = String::new();
         out.push_str("[\n");
-        out.push_str(
-            &data
-                .iter()
-                .map(|d| format!("    {d}\n"))
-                .collect::<String>(),
-        );
+        out.push_str(&data.iter().fold(String::new(), |mut output, d| {
+            writeln!(output, "    {d}").unwrap(); // Writing to a string cannot fail
+            output
+        }));
         out.push(']');
         out
     };

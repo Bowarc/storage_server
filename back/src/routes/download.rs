@@ -243,8 +243,7 @@ mod tests {
             info!("{}", rs);
 
             let suuid = rs.replace("Success: ", "");
-            let uuid = uuid::Uuid::from_str(&suuid).unwrap();
-            uuid
+            uuid::Uuid::from_str(&suuid).unwrap()
         };
 
         let client = Client::tracked(build_rocket().await)
@@ -265,10 +264,11 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_download_filename() {
-        let logcfg = logger::LoggerConfig::new()
-            .set_level(log::LevelFilter::Trace)
-            .add_filter("rocket", log::LevelFilter::Warn);
-        logger::init(logcfg, None);
+        logger::init(
+            logger::Config::default()
+                .output(logger::Output::Stdout)
+                .filter("rocket", log::LevelFilter::Warn),
+        );
 
         let base_filename = "test.file";
 
@@ -293,8 +293,8 @@ mod tests {
                 .await
                 .unwrap()
                 .replace("Success: ", "");
-            let uuid = uuid::Uuid::from_str(&suuid).unwrap();
-            uuid
+
+            uuid::Uuid::from_str(&suuid).unwrap()
         };
 
         let client = Client::tracked(build_rocket().await)

@@ -27,7 +27,7 @@ pub async fn api_upload(
     );
 
     // Validation of user input
-    if !FILENAME_VALIDATION_REGEX.is_match(&filename) {
+    if !FILENAME_VALIDATION_REGEX.is_match(filename) {
         error!("[{uuid}] The given filename doesn't match the validation regex");
         return ResponseBuilder::default()
             .with_status(Status::BadRequest)
@@ -61,7 +61,6 @@ pub async fn api_upload(
             .with_content_type(ContentType::Text)
             .build();
     }
-
 
     let data = capped_data.value;
 

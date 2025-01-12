@@ -1,6 +1,6 @@
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct CacheEntry {
-    pub id: uuid::Uuid,
+    pub uuid: uuid::Uuid,
     pub metadata: Metadata,
     pub is_ready: std::sync::atomic::AtomicBool,
     pub data_size: std::sync::atomic::AtomicUsize,
@@ -21,9 +21,9 @@ pub struct UploadData {
 }
 
 impl CacheEntry {
-    pub fn new(id: uuid::Uuid, metadata: Metadata) -> Self {
+    pub fn new(uuid: uuid::Uuid, metadata: Metadata) -> Self {
         Self {
-            id,
+            uuid,
             metadata,
             is_ready: std::sync::atomic::AtomicBool::new(false),
             data_size: std::sync::atomic::AtomicUsize::new(0),
