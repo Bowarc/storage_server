@@ -55,11 +55,10 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     // Safety:
     //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
     unsafe {
-        FILE_REQ_SIZE_LIMIT = rocket
-            .config()
-            .limits
-            .get("file")
-            .expect("Failled to read the normal and default config")
+        let Some(limit) = rocket.config().limits.get("file") else{
+            panic!("Failed to retrieve the file limit from the config");
+        };
+        FILE_REQ_SIZE_LIMIT = limit;
     }
 
     rocket
@@ -71,6 +70,7 @@ async fn main() {
     logger::init([
         logger::Config::default()
             .output(logger::Output::Stdout)
+            .colored(true)
             .filters(&filters),
         logger::Config::default()
             .output(logger::Output::new_timed_file(
