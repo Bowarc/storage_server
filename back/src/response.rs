@@ -1,7 +1,35 @@
+pub enum ResponseContent {
+    Sized(Vec<u8>),
+    // ZstdDecoderReader(zstd::stream::read::Decoder<>)
+    Stream(Box<dyn std::io::Read + Send>),
+}
+
+impl From<Vec<u8>> for ResponseContent {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Sized(value)
+    }
+}
+impl From<String> for ResponseContent {
+    fn from(value: String) -> Self {
+        Self::Sized(value.into())
+    }
+}
+impl From<&'static str> for ResponseContent {
+    fn from(value: &'static str) -> Self {
+        Self::Sized(value.as_bytes().to_vec())
+    }
+}
+
+impl From<Box<dyn std::io::Read + Send>> for ResponseContent {
+    fn from(value: Box<dyn std::io::Read + Send>) -> Self {
+        Self::Stream(value)
+    }
+}
+
 pub struct Response {
     status: rocket::http::Status,
     headers: std::collections::HashMap<String, String>,
-    content: Vec<u8>,
+    content: ResponseContent,
     content_type: rocket::http::ContentType,
 }
 
@@ -32,7 +60,17 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
             resp.raw_header(name, value);
         }
 
-        resp.sized_body(self.content.len(), Cursor::new(self.content));
+        match self.content {
+            ResponseContent::Sized(vec) => {
+                resp.sized_body(vec.len(), Cursor::new(vec));
+            }
+            ResponseContent::Stream(async_read) => {
+                use tokio_util::compat::FuturesAsyncReadCompatExt as _;
+                resp.streamed_body(
+                    futures::io::AllowStdIo::new(async_read).compat()
+                );
+            }
+        }
 
         resp.ok()
     }
@@ -47,7 +85,7 @@ impl ResponseBuilder {
     //     Self { inner: response }
     // }
 
-    pub fn with_content(mut self, value: impl Into<Vec<u8>>) -> Self {
+    pub fn with_content(mut self, value: impl Into<ResponseContent>) -> Self {
         self.inner.content = value.into();
         self
     }
@@ -88,75 +126,9 @@ impl Default for ResponseBuilder {
             inner: Response {
                 status: Status::Ok,
                 headers: HashMap::new(),
-                content: Vec::new(),
+                content: ResponseContent::Sized(Vec::new()),
                 content_type: ContentType::Any,
             },
         }
     }
 }
-
-// pub struct JsonApiResponse {
-//     json: JsonValue,
-//     status: Status,
-//     headers: std::collections::HashMap<String, String>,
-// }
-
-// impl<'r> rocket::response::Responder<'r, 'static> for JsonApiResponse {
-//     fn respond_to(self, req: &rocket::Request) -> rocket::response::Result<'static> {
-//         let mut resp = rocket::Response::build_from(self.json.respond_to(req).unwrap());
-
-//         let mut resp = resp.status(self.status);
-
-//         for (name, value) in self.headers {
-//             resp = resp.raw_header(name, value);
-//         }
-
-//         let out = resp.ok();
-//         // trace!("{out:?}");
-
-//         out
-//     }
-// }
-
-// pub struct JsonApiResponseBuilder {
-//     inner: JsonApiResponse,
-// }
-
-// impl JsonApiResponseBuilder {
-//     pub fn with_json(mut self, value: JsonValue) -> Self {
-//         self.inner.json = value;
-//         self
-//     }
-
-//     pub fn with_status(mut self, status: Status) -> Self {
-//         self.inner.status = status;
-//         self
-//     }
-
-//     pub fn with_header(mut self, name: &str, value: &str) -> Self {
-//         self.inner
-//             .headers
-//             .insert(name.to_string(), value.to_string());
-//         self
-//     }
-
-//     pub fn build(self) -> JsonApiResponse {
-//         self.inner
-//     }
-// }
-
-// impl Default for JsonApiResponseBuilder {
-//     fn default() -> Self {
-//         JsonApiResponseBuilder {
-//             inner: JsonApiResponse {
-//                 json: json!({}),
-//                 status: Status::Ok,
-//                 headers: {
-//                     let mut h = std::collections::HashMap::new();
-//                     h.insert("Content-Type".to_string(), "application/json".to_string());
-//                     h
-//                 },
-//             },
-//         }
-//     }
-// }

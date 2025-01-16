@@ -211,6 +211,40 @@ impl Cache {
 
         Ok((entry.upload_info().clone(), data))
     }
+
+    pub async fn load_stream(
+        &self,
+        uuid: uuid::Uuid,
+    ) -> Result<(data::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError>
+    {
+        use {
+            crate::error::CacheError,
+            brotli::BrotliDecompress,
+            rocket::tokio::{fs, io::AsyncReadExt},
+        };
+
+        // Load and decompress the given cache entry
+
+        let entry = self
+            .inner
+            .iter()
+            .find(|e| e.uuid() == uuid)
+            .ok_or(CacheError::NotFound)?;
+
+        if !entry.is_ready() {
+            return Err(CacheError::NotReady);
+        }
+        let id = uuid.hyphenated().to_string();
+
+        let file_path = format!("{CACHE_DIRECTORY}/{id}.data");
+
+        let file = std::fs::OpenOptions::new().read(true).open(&file_path)
+            .map_err(|_| CacheError::FileOpen(file_path))?;
+
+        let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+
+        Ok((entry.upload_info().clone(), Box::new(decoder)))
+    }
 }
 
 // try read a specific cache from file
@@ -459,40 +493,33 @@ async fn store_data_sync1<'r>(
 
     debug!("Creating the encoder");
 
-    let mut encoder = zstd::stream::write::Encoder::new(data_file,  5).unwrap();
-   
+    let mut encoder = zstd::stream::write::Encoder::new(data_file, 3).unwrap();
+
     debug!("Streaming . . .");
     let mut total_read = 0;
     let mut total_wrote = 0;
 
     // I am not too happy with that allocation, but since we're in an async context, we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
-    // since tokio's threads don't have a big stack size    
+    // since tokio's threads don't have a big stack size
     // let mut b = vec![0; 100_000]; // 100kb, heap
     let mut b = vec![0; 500_000]; // 500kb, heap
     // let mut b = vec![0; 5_000_000]; // 5mb, heap
     // let mut b = vec![0; 5_000_000_000];
 
-    let mut i =0;
+    let mut i = 0;
     loop {
         use rocket::tokio::io::AsyncReadExt;
         // let read = encoder.read(&mut b).await.unwrap();
-        let read = original_data
-            .read(&mut b)
-            .await
-            .unwrap();
-
-        
+        let read = original_data.read(&mut b).await.unwrap();
 
         if read == 0 {
             info!("EOF");
             break;
         }
-        i +=1;
+        i += 1;
 
-        let wrote = encoder
-            .write( &b[..read])
-            .unwrap();
+        let wrote = encoder.write(&b[..read]).unwrap();
         // let wrote = data_file.write(&b[..read]).unwrap();
 
         total_read += read;
@@ -618,3 +645,4 @@ async fn store<'r>(
 
     Ok(entry.data_size())
 }
+
