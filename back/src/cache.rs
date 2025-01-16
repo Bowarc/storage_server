@@ -459,23 +459,21 @@ async fn store_data_sync1<'r>(
 
     debug!("Creating the encoder");
 
-    let mut encoder = zstd::stream::write::Encoder::new(data_file, 10).unwrap();
-
-    // original_data.stream_to(&mut encoder).await.unwrap();
-    // encoder.shutdown().await.unwrap();
-
+    let mut encoder = zstd::stream::write::Encoder::new(data_file,  5).unwrap();
+   
     debug!("Streaming . . .");
     let mut total_read = 0;
     let mut total_wrote = 0;
 
-
     // I am not too happy with that allocation, but since we're in an async context, we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
     // since tokio's threads don't have a big stack size    
-    // let mut b = vec![0; 100_000]; // 500kb on the heap, 0.3 with level10, 1s100ms
-    // let mut b = vec![0; 5_000_000]; // 5mb on the heap, 0.3 with level10, 1s100ms
-    let mut b = vec![0; 5_000_000_000]; // 500mb on the heap, 0.27 with level 22, 1m30s
+    // let mut b = vec![0; 100_000]; // 100kb, heap
+    let mut b = vec![0; 500_000]; // 500kb, heap
+    // let mut b = vec![0; 5_000_000]; // 5mb, heap
+    // let mut b = vec![0; 5_000_000_000];
 
+    let mut i =0;
     loop {
         use rocket::tokio::io::AsyncReadExt;
         // let read = encoder.read(&mut b).await.unwrap();
@@ -484,10 +482,13 @@ async fn store_data_sync1<'r>(
             .await
             .unwrap();
 
+        
+
         if read == 0 {
             info!("EOF");
             break;
         }
+        i +=1;
 
         let wrote = encoder
             .write( &b[..read])
@@ -508,6 +509,7 @@ async fn store_data_sync1<'r>(
         //     ByteUnit::Byte(total_wrote as u64)
         // );
     }
+    debug!("{i} loops");
 
     {
         encoder.flush().unwrap();
