@@ -22,12 +22,12 @@
 }
 
 .home_section_title{
-
     font-size: 43px;
     font-family: 'Tangerine', sans-serif;
     color: var(--secondary-400);
 
     margin-left:  var(--side-margin);
+    margin-bottom: 0px;
 /*    margin-right: var(--side-margin);*/
 }
 

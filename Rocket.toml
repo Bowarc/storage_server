@@ -19,11 +19,12 @@ cli_colors = false
 [default.limits]
 bytes = "1 B"
 data-form = "1 B"
-file = "1 GiB" # 50 MiB
+# file = "0.5 GiB" # 50 MiB
+file = "1 GiB"  # 50 MiB
 form = "1 B"
 msgpack = "1 B"
 string = "1 B"
-json = "1 B" # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
+json = "1 B"    # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
 
 
 # ## set only when compiled in debug mode, i.e, `cargo build`
