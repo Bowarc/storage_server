@@ -1,3 +1,5 @@
+use rocket::{data::ByteUnit, http::RawStr};
+
 lazy_static! {
     static ref FILENAME_VALIDATION_REGEX: regex::Regex =
         regex::Regex::new(r"^[A-Za-z0-9_.-]{1,100}$").unwrap();
@@ -36,76 +38,82 @@ pub async fn api_upload(
             .build();
     }
 
-    let capped_data = match raw_data
-        .open(unsafe { crate::FILE_REQ_SIZE_LIMIT })
-        .into_bytes()
-        .await
-    {
-        Ok(data) => data,
-        Err(e) => {
-            error!("[{uuid}] Could not parse given data: {e}");
+    // let data_stream = raw_data.open(unsafe{crate::FILE_REQ_SIZE_LIMIT});
+    let data_stream = raw_data.open(ByteUnit::max_value());
 
-            return ResponseBuilder::default()
-                .with_status(Status::BadRequest)
-                .with_content("The given body content could not be parsed")
-                .with_content_type(ContentType::Text)
-                .build();
-        }
-    };
+    // let capped_data = match raw_data
+    //     .open(unsafe { crate::FILE_REQ_SIZE_LIMIT })
+    //     .into_bytes()
+    //     .await
+    // {
+    //     Ok(data) => data,
+    //     Err(e) => {
+    //         error!("[{uuid}] Could not parse given data: {e}");
 
-    if !capped_data.is_complete() {
-        error!("Data too large");
-        return ResponseBuilder::default()
-            .with_status(Status::PayloadTooLarge)
-            .with_content("The given data is too large")
-            .with_content_type(ContentType::Text)
-            .build();
-    }
+    //         return ResponseBuilder::default()
+    //             .with_status(Status::BadRequest)
+    //             .with_content("The given body content could not be parsed")
+    //             .with_content_type(ContentType::Text)
+    //             .build();
+    //     }
+    // };
 
-    let data = capped_data.value;
+    // if !capped_data.is_complete() {
+    //     error!("Data too large");
+    //     return ResponseBuilder::default()
+    //         .with_status(Status::PayloadTooLarge)
+    //         .with_content("The given data is too large")
+    //         .with_content_type(ContentType::Text)
+    //         .build();
+    // }
+
+    // let data = capped_data.value;
 
     // No need to decode user input as it's not b64 encoded anymore
 
     let mut cache_handle = cache.write().await;
 
-    let exec = cache_handle.store(
-        uuid,
+    let cache_entry = cache_handle.new_entry(uuid, 
         crate::cache::data::UploadInfo::new(
             "NO_USER".to_string(),
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
-        ),
-        data,
+        )
     );
 
-    // Release the lock to be able to wait the end of the 'exec' without denying other calls
     drop(cache_handle);
 
-    if wait_store {
-        debug!("[{uuid}] Waiting for cache to finish storing the data");
+    crate::cache::Cache::store(cache_entry, data_stream).await.unwrap();
+    
 
-        match exec.await {
-            Ok(Ok(())) => {
-                // All good
-            }
-            Ok(Err(e)) => {
-                error!("[{uuid}] An error occured while storing the given data: {e}");
-                return ResponseBuilder::default()
-                    .with_status(Status::InternalServerError)
-                    .with_content("An error occured while caching the data")
-                    .with_content_type(ContentType::Text)
-                    .build();
-            }
-            Err(join_error) => {
-                error!("[{uuid}] Something went really bad while waiting for worker task to end: {join_error}");
-                return ResponseBuilder::default()
-                    .with_status(Status::InternalServerError)
-                    .with_content("Worker failled")
-                    .with_content_type(ContentType::Text)
-                    .build();
-            }
-        }
-    }
+    // Release the lock to be able to wait the end of the 'exec' without denying other calls
+    // drop(cache_handle);
+
+    // if wait_store {
+    //     debug!("[{uuid}] Waiting for cache to finish storing the data");
+
+    //     match exec.await {
+    //         Ok(()) => {
+    //             // All good
+    //         }
+    //         Err(e) => {
+    //             error!("[{uuid}] An error occured while storing the given data: {e}");
+    //             return ResponseBuilder::default()
+    //                 .with_status(Status::InternalServerError)
+    //                 .with_content("An error occured while caching the data")
+    //                 .with_content_type(ContentType::Text)
+    //                 .build();
+    //         }
+    //         // Err(join_error) => {
+    //         //     error!("[{uuid}] Something went really bad while waiting for worker task to end: {join_error}");
+    //         //     return ResponseBuilder::default()
+    //         //         .with_status(Status::InternalServerError)
+    //         //         .with_content("Worker failled")
+    //         //         .with_content_type(ContentType::Text)
+    //         //         .build();
+    //         // }
+    //     }
+    // }
 
     info!(
         "[{uuid}] Responded in {}",

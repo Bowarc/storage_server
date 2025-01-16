@@ -49,8 +49,6 @@ impl yew::Component for Home {
                             }</h3>
 
                             <p class="home_section_text">
-                                { "Web interface" }
-                                <br/>
                                 { "Visit " }
                                 <button onclick={ onclick }>{ "the upload page" }</button>
                                 { ", select a file, hit upload."}
