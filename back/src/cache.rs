@@ -7,6 +7,8 @@ use rocket::{
     tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader},
 };
 
+use crate::error::CacheError;
+
 pub mod data;
 
 #[cfg(not(test))]
@@ -215,14 +217,8 @@ impl Cache {
     pub async fn load_stream(
         &self,
         uuid: uuid::Uuid,
-    ) -> Result<(data::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError>
-    {
-        use {
-            crate::error::CacheError,
-            brotli::BrotliDecompress,
-            rocket::tokio::{fs, io::AsyncReadExt},
-        };
-
+    ) -> Result<(data::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError> {
+        use crate::error::CacheError;
         // Load and decompress the given cache entry
 
         let entry = self
@@ -234,14 +230,18 @@ impl Cache {
         if !entry.is_ready() {
             return Err(CacheError::NotReady);
         }
+
         let id = uuid.hyphenated().to_string();
 
         let file_path = format!("{CACHE_DIRECTORY}/{id}.data");
 
-        let file = std::fs::OpenOptions::new().read(true).open(&file_path)
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .open(&file_path)
             .map_err(|_| CacheError::FileOpen(file_path))?;
 
-        let decoder = zstd::stream::read::Decoder::new(file).unwrap();
+        let decoder = zstd::stream::read::Decoder::new(file)
+            .map_err(|e| CacheError::FileRead(e.to_string()))?;
 
         Ok((entry.upload_info().clone(), Box::new(decoder)))
     }
@@ -504,8 +504,8 @@ async fn store_data_sync1<'r>(
     // since tokio's threads don't have a big stack size
     // let mut b = vec![0; 100_000]; // 100kb, heap
     let mut b = vec![0; 500_000]; // 500kb, heap
-    // let mut b = vec![0; 5_000_000]; // 5mb, heap
-    // let mut b = vec![0; 5_000_000_000];
+                                  // let mut b = vec![0; 5_000_000]; // 5mb, heap
+                                  // let mut b = vec![0; 5_000_000_000];
 
     let mut i = 0;
     loop {
@@ -538,24 +538,20 @@ async fn store_data_sync1<'r>(
     }
     debug!("{i} loops");
 
-    {
-        encoder.flush().unwrap();
-        // encoder.shutdown().await.unwrap();
-    }
+    // TODO: Redo this compression error variant to allow the use of the actual error, or string idc
+    encoder.flush().map_err(|e| CacheError::Compression)?;
 
-    let file_path = format!("{CACHE_DIRECTORY}/{id}.data",);
+    let data_file= encoder.finish().map_err(|e|{
+        CacheError::Compression
+    })?;
+    
+    let metadata = data_file.metadata().map_err(|e|{
+        CacheError::FileRead(format!("Could not read the metadata of data file '{id}' due to: {e}"))
+    })?;
 
-    let file_size = rocket::tokio::fs::metadata(file_path).await.unwrap().len();
+    let file_size= metadata.len();
+
     debug!("File size: {file_size}");
-    // {
-    //     let mut b = [0;1];
-    //     let x=  original_data.stream_to(&mut b).await.unwrap();
-    //     let x =
-    // }
-    // debug!("{}",  original_data.stream_to());
-
-    // encoder.shutdown().await.unwrap();
-    debug!("encoder flushed");
 
     debug!(
         "totals:\nRead: {}\nWrote: {}\nRatio: {:.3}",
@@ -645,4 +641,3 @@ async fn store<'r>(
 
     Ok(entry.data_size())
 }
-

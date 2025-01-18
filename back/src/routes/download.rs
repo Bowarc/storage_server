@@ -149,7 +149,6 @@ pub async fn api_download_stream(
         rocket::http::{ContentType, Status},
         std::time::Instant,
     };
-
     let start_timer = Instant::now();
 
     info!("Request of {id}");
@@ -176,23 +175,21 @@ pub async fn api_download_stream(
 
     let cache_handle = cache.read().await;
 
-    let load_res = cache_handle.load_stream(uuid).await;
+    let load_result = cache_handle.load_stream(uuid).await;
 
     // Keep the lock for the minimum amount of time
     drop(cache_handle);
 
-    let (meta, data) = match load_res {
+    let (meta, data_stream) = match load_result {
         Ok(meta_data) => meta_data,
         Err(CacheError::NotReady) => {
             error!("[{uuid}] The requested cache is not ready yet");
-
             return ResponseBuilder::default()
                 .with_status(Status::NotFound)
                 .with_content("The requested cache is not ready yet")
                 .with_content_type(ContentType::Text)
                 .build();
         }
-
         Err(CacheError::NotFound) => {
             error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
             return ResponseBuilder::default()
@@ -205,7 +202,7 @@ pub async fn api_download_stream(
             error!("[{uuid}] Failled to open data file of [{uuid}] due to: {e}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
-                .with_content("Could not acces given id's content")
+                .with_content("Could not access given cache entry")
                 .with_content_type(ContentType::Text)
                 .build();
         }
@@ -213,8 +210,8 @@ pub async fn api_download_stream(
             error!("[{uuid}] Failled to read cache of [{uuid}] due to: {e}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
-                .with_content("Could not access given cache entry")
                 .with_content_type(ContentType::Text)
+                .with_content("Could not acces given id's content")
                 .build();
         }
         Err(e) => {
@@ -234,7 +231,7 @@ pub async fn api_download_stream(
 
     ResponseBuilder::default()
         .with_status(Status::Ok)
-        .with_content(data)
+        .with_content(data_stream)
         .with_content_type(ContentType::Bytes)
         .with_header(
             "Content-Disposition",
