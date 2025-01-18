@@ -84,10 +84,10 @@ pub fn remove_script(id: &str) {
 pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> {
     use wasm_bindgen::JsValue;
 
-    async fn method_1(text: &str) -> Result<(), JsValue>{
+    async fn method_1(text: &str) -> Result<(), JsValue> {
         use wasm_bindgen::JsValue;
         use web_sys::window;
-        let Some(window) = window() else{
+        let Some(window) = window() else {
             return Err(JsValue::from("Could not copy requested content to clipboard due to: Could not get a handle to the window"));
         };
 
@@ -98,32 +98,38 @@ pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> 
         let clipboard = window.navigator().clipboard();
 
         if let Err(e) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(text)).await {
-            return Err(JsValue::from(&format!("Could not copy requested content to clipboard due to: {e:?}")));
+            return Err(JsValue::from(&format!(
+                "Could not copy requested content to clipboard due to: {e:?}"
+            )));
         }
 
         Ok(())
     }
 
-    fn method_2(text: &str) -> Result<(), JsValue>{
+    fn method_2(text: &str) -> Result<(), JsValue> {
+        use gloo::console::log;
         use wasm_bindgen::JsCast;
         use wasm_bindgen::JsValue;
         use web_sys::window;
-        use gloo::console::log;
 
-        let Some(window) = window()else{
-            return Err(JsValue::from("Could not get a handle to the window"))
+        let Some(window) = window() else {
+            return Err(JsValue::from("Could not get a handle to the window"));
         };
 
         log!("Got window");
-        let Some(document) = window.document() else{
-            return Err(JsValue::from("Could not get a handle to the window's document"))
+        let Some(document) = window.document() else {
+            return Err(JsValue::from(
+                "Could not get a handle to the window's document",
+            ));
         };
 
         let html_document: web_sys::HtmlDocument = document.dyn_into()?;
         log!("Got document");
 
-        let Some(body) = html_document.body() else{
-            return Err(JsValue::from("Could not get a handle to the window's document's body"))
+        let Some(body) = html_document.body() else {
+            return Err(JsValue::from(
+                "Could not get a handle to the window's document's body",
+            ));
         };
 
         let text_area: web_sys::HtmlTextAreaElement =
@@ -141,7 +147,6 @@ pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> 
         text_area.select();
         log!("text_area has been selected");
 
-
         if !html_document.exec_command("copy")? {
             gloo::console::log!("hehe no");
         }
@@ -154,7 +159,6 @@ pub async fn copy_to_clipboard(text: &str) -> Result<(), wasm_bindgen::JsValue> 
 
     // method_1(text).await
     method_2(text)
-
 }
 
 // async fn fetch_dashboard(url: &'static str) -> Result<DashboardData, FetchError> {

@@ -73,18 +73,20 @@ pub async fn api_upload(
 
     let mut cache_handle = cache.write().await;
 
-    let cache_entry = cache_handle.new_entry(uuid, 
+    let cache_entry = cache_handle.new_entry(
+        uuid,
         crate::cache::data::UploadInfo::new(
             "NO_USER".to_string(),
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
-        )
+        ),
     );
 
     drop(cache_handle);
 
-    crate::cache::Cache::store(cache_entry, data_stream).await.unwrap();
-    
+    crate::cache::Cache::store(cache_entry, data_stream)
+        .await
+        .unwrap();
 
     // Release the lock to be able to wait the end of the 'exec' without denying other calls
     // drop(cache_handle);

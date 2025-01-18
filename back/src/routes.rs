@@ -171,12 +171,11 @@ async fn static_file_response(
         Some(bytes) => ResponseBuilder::default()
             .with_status(Status::Ok)
             .with_content(bytes)
-            .with_content_type(content_type).build(),
-        None => {
-            ResponseBuilder::default()
-                .with_status(Status::NotFound)
-                .build()
-        }
+            .with_content_type(content_type)
+            .build(),
+        None => ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .build(),
     }
 }
 

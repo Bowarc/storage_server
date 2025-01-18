@@ -9,9 +9,11 @@ pub async fn _cache_list(
         .await
         .inner
         .iter()
-        .map(|cache_entry: &std::sync::Arc<crate::cache::data::CacheEntry>| {
-            rocket::serde::json::to_string(&**cache_entry).unwrap()
-        })
+        .map(
+            |cache_entry: &std::sync::Arc<crate::cache::data::CacheEntry>| {
+                rocket::serde::json::to_string(&**cache_entry).unwrap()
+            },
+        )
         .collect::<Vec<String>>();
     format!("{data:?}")
 }
