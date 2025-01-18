@@ -41,6 +41,6 @@ pub enum CacheError {
 pub enum UuidParseError {
     #[error("Failled the regex check")]
     Regex,
-    #[error("Failled the regex check")]
+    #[error("Could not convert given UUID")]
     Convert,
 }
