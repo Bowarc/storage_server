@@ -66,9 +66,7 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
             }
             ResponseContent::Stream(async_read) => {
                 use tokio_util::compat::FuturesAsyncReadCompatExt as _;
-                resp.streamed_body(
-                    futures::io::AllowStdIo::new(async_read).compat()
-                );
+                resp.streamed_body(futures::io::AllowStdIo::new(async_read).compat());
             }
         }
 

@@ -56,7 +56,7 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     // Safety:
     //  This will only be writen once and at the reads are not yet loaded because the sever is not yet launched
     unsafe {
-        let Some(limit) = rocket.config().limits.get("file") else{
+        let Some(limit) = rocket.config().limits.get("file") else {
             panic!("Failed to retrieve the file limit from the config");
         };
         FILE_REQ_SIZE_LIMIT = limit;

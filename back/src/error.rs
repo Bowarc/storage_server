@@ -2,7 +2,6 @@
 pub enum CacheError {
     // #[error("Test error")]
     // Test,
-
     #[error("Could not create file: {0}")]
     FileCreate(String),
 
@@ -34,7 +33,7 @@ pub enum CacheError {
     Deserialization,
 
     #[error("The given id ({0}) could not be parsed into an uuid")]
-    InvalidId(String)
+    InvalidId(String),
 }
 
 #[derive(Debug, thiserror::Error)]

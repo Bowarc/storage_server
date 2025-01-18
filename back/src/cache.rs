@@ -370,8 +370,40 @@ async fn create_files(
             remove_file(data_path).await.unwrap();
             Err(e)
         }
-        (Err(de), Err(me)) => Err(CacheError::FileCreate(format!("Data ({de})\nMeta ({me})"))),
+        (Err(me), Err(de)) => Err(CacheError::FileCreate(format!("Data ({de})\nMeta ({me})"))),
     }
+}
+
+pub fn sync_cache_files(
+    meta_path: String,
+    data_path: String,
+) -> Result<(std::fs::File, std::fs::File), CacheError> {
+    use std::fs::{remove_file, OpenOptions};
+
+    let meta_file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&meta_path)
+        .map_err(|e| {
+            CacheError::FileCreate(format!(
+                "Failed to create meta file with path: '{meta_path}' due to: {e}"
+            ))
+        })?;
+
+    let data_file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&data_path).map_err(|e|{
+            if let Err(remove_e) = remove_file(&meta_path){
+                return CacheError::FileOpen(format!("Failed to delete meta file with path '{meta_path}' due to: {remove_e} while cleaning after a fail to create data file with path '{data_path}' due to: {e}"));
+            }
+
+             CacheError::FileCreate(format!(
+                "Failed to create data file with path: '{data_path}' due to: {e}"
+            ))
+        })?;
+
+    Ok((meta_file, data_file))
 }
 
 async fn store_data_async1<'r>(
@@ -395,7 +427,7 @@ async fn store_data_async1<'r>(
 
     let mut encoder = async_compression::tokio::write::ZstdEncoder::with_quality(
         data_file,
-        async_compression::Level::Precise(10),
+        async_compression::Level::Precise(3),
     );
 
     // original_data.stream_to(&mut encoder).await.unwrap();
@@ -404,9 +436,10 @@ async fn store_data_async1<'r>(
     debug!("Streaming . . .");
     let mut total_read = 0;
     let mut total_wrote = 0;
+    let mut b = vec![0; 500_000];
+
     loop {
         use rocket::tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let mut b = [0; 100_000];
         // let read = encoder.read(&mut b).await.unwrap();
         let read = original_data.read(&mut b).await.unwrap();
 
@@ -485,14 +518,9 @@ async fn store_data_sync1<'r>(
     id: &str,
     entry: std::sync::Arc<data::CacheEntry>,
     mut original_data: DataStream<'r>,
-    data_file: &mut rocket::tokio::fs::File,
+    data_file: &mut std::fs::File,
 ) -> Result<(), crate::error::CacheError> {
-    let data_file = data_file.try_clone().await.unwrap().try_into_std().unwrap();
-
-    // Some files formats like png are already compressed by default, this is useless
-
     debug!("Creating the encoder");
-
     let mut encoder = zstd::stream::write::Encoder::new(data_file, 3).unwrap();
 
     debug!("Streaming . . .");
@@ -502,15 +530,17 @@ async fn store_data_sync1<'r>(
     // I am not too happy with that allocation, but since we're in an async context, we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
     // since tokio's threads don't have a big stack size
-    // let mut b = vec![0; 100_000]; // 100kb, heap
-    let mut b = vec![0; 500_000]; // 500kb, heap
-                                  // let mut b = vec![0; 5_000_000]; // 5mb, heap
-                                  // let mut b = vec![0; 5_000_000_000];
+    // const BUFFER_SIZE: usize = 100_000; // 100kb
+    const BUFFER_SIZE: usize = 500_000; // 500kb
+    #[rustfmt::skip]
+    // const BUFFER_SIZE: usize = 5_000_000; // 5mb
+    // const BUFFER_SIZE: usize = 500_000_000; // 500mb
+    // const BUFFER_SIZE: usize = 5_000_000_000; // 5gb
+    let mut b = vec![0; BUFFER_SIZE]; // 500kb, heap
 
     let mut i = 0;
     loop {
         use rocket::tokio::io::AsyncReadExt;
-        // let read = encoder.read(&mut b).await.unwrap();
         let read = original_data.read(&mut b).await.unwrap();
 
         if read == 0 {
@@ -520,7 +550,6 @@ async fn store_data_sync1<'r>(
         i += 1;
 
         let wrote = encoder.write(&b[..read]).unwrap();
-        // let wrote = data_file.write(&b[..read]).unwrap();
 
         total_read += read;
         total_wrote += wrote;
@@ -541,15 +570,15 @@ async fn store_data_sync1<'r>(
     // TODO: Redo this compression error variant to allow the use of the actual error, or string idc
     encoder.flush().map_err(|e| CacheError::Compression)?;
 
-    let data_file= encoder.finish().map_err(|e|{
-        CacheError::Compression
-    })?;
-    
-    let metadata = data_file.metadata().map_err(|e|{
-        CacheError::FileRead(format!("Could not read the metadata of data file '{id}' due to: {e}"))
+    let data_file = encoder.finish().map_err(|e| CacheError::Compression)?;
+
+    let metadata = data_file.metadata().map_err(|e| {
+        CacheError::FileRead(format!(
+            "Could not read the metadata of data file '{id}' due to: {e}"
+        ))
     })?;
 
-    let file_size= metadata.len();
+    let file_size = metadata.len();
 
     debug!("File size: {file_size}");
 
@@ -560,13 +589,6 @@ async fn store_data_sync1<'r>(
         total_wrote as f64 / total_read as f64
     );
     debug!("Header size: {}", file_size - total_wrote as u64);
-
-    // let x = original_data.stream_to(encoder).await.unwrap();
-
-    // debug!("Wrote {x} bytes, i think ?");
-    // debug!("{}, {}", x.written, x.complete);
-
-    // encoder.write_all(original_data).await.unwrap();
 
     // Don't forget to update the cache entry
     // entry.set_data_size(compressed_data_length as u64);
@@ -582,12 +604,9 @@ async fn store_data_sync1<'r>(
 async fn store_meta(
     id: &str,
     entry: std::sync::Arc<data::CacheEntry>,
-    meta_file: &mut rocket::tokio::fs::File,
+    meta_file: &mut std::fs::File,
 ) -> Result<(), crate::error::CacheError> {
-    use {
-        crate::error::CacheError, rocket::serde::json::serde_json,
-        rocket::tokio::io::AsyncWriteExt as _,
-    };
+    use {crate::error::CacheError, rocket::serde::json::serde_json};
 
     let metadata = entry.build_metadata();
 
@@ -598,7 +617,7 @@ async fn store_meta(
 
     // let meta = ; // Cannot inline with the above due to lifetime issues
 
-    if let Err(e) = meta_file.write_all(meta.as_bytes()).await {
+    if let Err(e) = meta_file.write_all(meta.as_bytes()) {
         error!("Failled to write meta file: {e}");
         return Err(CacheError::FileWrite(format!("meta - {e}")));
     }
@@ -612,11 +631,15 @@ async fn store<'r>(
 ) -> Result<u64, crate::error::CacheError> {
     let id = entry.uuid().hyphenated().to_string();
 
-    let (mut meta_file, mut data_file) = create_files(
+    // let (mut meta_file, mut data_file) = create_files(
+    //     format!("{CACHE_DIRECTORY}/{id}.meta"),
+    //     format!("{CACHE_DIRECTORY}/{id}.data"),
+    // )
+    // .await?;
+    let (mut meta_file, mut data_file) = sync_cache_files(
         format!("{CACHE_DIRECTORY}/{id}.meta"),
         format!("{CACHE_DIRECTORY}/{id}.data"),
-    )
-    .await?;
+    )?;
 
     /* -------------------------------------------------------------------------------
                                 Data file

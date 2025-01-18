@@ -244,7 +244,6 @@ pub async fn api_download_stream(
         .build()
 }
 
-
 ///
 /// This route is the seccond way to download a cache's content
 ///
