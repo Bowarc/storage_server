@@ -417,51 +417,52 @@ async fn store_data_sync<'r>(
     // const BUFFER_SIZE: usize = 5_000_000; // 5mb
     // const BUFFER_SIZE: usize = 500_000_000; // 500mb
     // const BUFFER_SIZE: usize = 5_000_000_000; // 5gb
-    // let mut b = vec![0; BUFFER_SIZE]; // 500kb, heap
+    let mut b = vec![0; BUFFER_SIZE]; // 500kb, heap
 
-    // let mut i = 0;
-    // loop {
-    //     use rocket::tokio::io::AsyncReadExt;
-    //     let read = original_data.read(&mut b).await.unwrap();
+    let mut i = 0;
+    loop {
+        use rocket::tokio::io::AsyncReadExt;
+        let read = original_data.read(&mut b).await.unwrap();
 
-    //     if read == 0 {
-    //         info!("EOF");
-    //         break;
-    //     }
-    //     i += 1;
+        if read == 0 {
+            info!("EOF");
+            break;
+        }
+        i += 1;
 
-    //     let wrote = encoder.write(&b[..read]).unwrap();
+        encoder.write_all(&b[..read]).unwrap();
 
-    //     total_read += read;
-    //     total_wrote += wrote;
+        total_read += read;
+        total_wrote += read;
 
-    //     if total_read > unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() } {
-    //         error!("Max size reached");
-    //         panic!()
-    //     }
+        if total_read > unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() } {
+            error!("Max size reached");
+            panic!()
+        }
 
-    //     // debug!(
-    //     //     "\nRead: {}\nWrote: {}",
-    //     //     ByteUnit::Byte(total_read as u64),
-    //     //     ByteUnit::Byte(total_wrote as u64)
-    //     // );
-    // }
-    // debug!("{i} loops");
-    rocket::tokio::io::copy(&mut original_data, &mut futures::io::AllowStdIo::new(encoder.auto_finish()).compat_write()).await.unwrap();
+        // debug!(
+        //     "\nRead: {}\nWrote: {}",
+        //     ByteUnit::Byte(total_read as u64),
+        //     ByteUnit::Byte(total_wrote as u64)
+        // );
+    }
+    debug!("{i} loops");
+
+    // rocket::tokio::io::copy(&mut original_data, &mut futures::io::AllowStdIo::new(encoder.auto_finish()).compat_write()).await.unwrap();
     // std::io::copy(&mut encoder, &mut dataf);
 
     // TODO: Redo this compression error variant to allow the use of the actual error, or string idc
-    // let data_file = encoder.finish().map_err(|e| CacheError::Compression)?;
+    let data_file = encoder.finish().map_err(|e| CacheError::Compression)?;
 
-    // let metadata = data_file.metadata().map_err(|e| {
-    //     CacheError::FileRead(format!(
-    //         "Could not read the metadata of data file '{id}' due to: {e}"
-    //     ))
-    // })?;
+    let metadata = data_file.metadata().map_err(|e| {
+        CacheError::FileRead(format!(
+            "Could not read the metadata of data file '{id}' due to: {e}"
+        ))
+    })?;
 
-    // let file_size = metadata.len();
+    let file_size = metadata.len();
 
-    // debug!("File size: {file_size}");
+    debug!("File size: {file_size}");
 
     debug!(
         "totals:\nRead: {}\nWrote: {}\nRatio: {:.3}",
