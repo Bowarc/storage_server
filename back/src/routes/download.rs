@@ -232,7 +232,7 @@ pub async fn api_download_stream(
     ResponseBuilder::default()
         .with_status(Status::Ok)
         .with_content(data_stream)
-        .with_content_type(ContentType::Bytes)
+        .with_content_type(ContentType::Binary)
         .with_header(
             "Content-Disposition",
             &format!(

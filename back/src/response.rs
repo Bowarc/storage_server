@@ -1,3 +1,6 @@
+// use futures::AsyncWriteExt;
+use tokio_util::bytes::BufMut;
+
 pub enum ResponseContent {
     Sized(Vec<u8>),
     // ZstdDecoderReader(zstd::stream::read::Decoder<>)
@@ -32,6 +35,42 @@ pub struct Response {
     content: ResponseContent,
     content_type: rocket::http::ContentType,
 }
+pin_project_lite::pin_project! {
+
+    #[derive(Debug)]
+    struct CustomByteStream<T> {
+        inner: T,
+        total_read: usize
+    }
+}
+
+impl<T: std::io::Read + Send> rocket::tokio::io::AsyncRead for CustomByteStream<T> {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut rocket::tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        use std::io::Write as _;
+        use std::task::Poll;
+        let me = self.project();
+
+        let mut buffer = [0; 1_000];
+
+        match me.inner.read(&mut buffer) {
+            Ok(read) => {
+                *me.total_read += read;
+                info!("Read {} bytes from inner stream", me.total_read);
+                let wrote = buf.writer().write(&buffer[..read]).unwrap();
+                if wrote == 0 {
+                    error!("EOF");
+                }
+
+                Poll::Ready(Ok(()))
+            }
+            Err(e) => Poll::Ready(Err(e)),
+        }
+    }
+}
 
 impl Response {
     pub fn status(&self) -> &rocket::http::Status {
@@ -56,7 +95,7 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
 
         resp.raw_header("Content-Type", self.content_type.to_string());
 
-        for (name, value) in self.headers {
+        for (name, value) in self.headers.into_iter() {
             resp.raw_header(name, value);
         }
 
@@ -64,9 +103,54 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
             ResponseContent::Sized(vec) => {
                 resp.sized_body(vec.len(), Cursor::new(vec));
             }
-            ResponseContent::Stream(async_read) => {
-                use tokio_util::compat::FuturesAsyncReadCompatExt as _;
-                resp.streamed_body(futures::io::AllowStdIo::new(async_read).compat());
+            ResponseContent::Stream(mut reader) => {
+                use std::io::Write as _;
+                // use tokio_util::compat::FuturesAsyncReadCompatExt as _;
+                // resp.streamed_body(CustomByteStream {
+                //     inner: async_read,
+                //     total_read: 0,
+                // });
+                let mut total = Vec::new();
+
+                let mut buffer = [0; 10_000];
+                let mut total_read = 0;
+                let mut total_write = 0;
+
+                loop {
+                    let read = reader.read(&mut buffer).unwrap();
+
+                    if read == 0 {
+                        warn!("EOF");
+                        std::thread::sleep_ms(1000);
+                        assert_eq!(reader.read(&mut buffer).unwrap(), 0);
+                        break;
+                    }
+                    total_read += read;
+
+                    total_write += total.write(&buffer[..read]).unwrap();
+                }
+
+                debug!("Finished decoding");
+                println!("total_read: {total_read}\ntotal_write: {total_write}");
+                resp.sized_body(total.len(), Cursor::new(total));
+                // let allow = futures::io::AllowStdIo::new(async_read);
+
+                // let compat = allow.compat();
+
+                // let stream = ReaderStream::from(custom);
+
+                // resp.streamed_body(futures::io::AllowStdIo::new(async_read).compat());
+                // let stream = async_stream::try_stream! {
+
+                //     let data: Vec::<u8> = vec![0; 10];
+                //     for i in 0..10{
+                //         yield data.clone()
+                //     }
+
+                // };
+                // StreamReader::new(futures::io::AllowStdIo::new(async_read).compat());
+
+                // resp.streamed_body(stream);
             }
         }
 
