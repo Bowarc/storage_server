@@ -141,11 +141,13 @@ name = "back"
 version = "0.1.0"
 dependencies = [
  "async-compression",
+ "async-stream",
  "brotli",
  "futures",
  "lazy_static",
  "log",
  "logger",
+ "pin-project-lite",
  "regex",
  "rocket",
  "serde",

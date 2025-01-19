@@ -9,7 +9,7 @@ port = 0xa455
 # Number of threads to use for executing futures.
 workers = 8
 # Keep-alive timeout seconds; disabled when 0.
-keep_alive = 5 # This could become a problem if we have to read/write large files
+keep_alive = 0 # This could become a problem if we have to read/write large files
 # Max level to log. (off/normal/debug/critical)
 log_level = "normal" # Isn't it the 'minimal' level instead ? like log everything above that threshold ?
 # Doesn't work well with my file logger system
