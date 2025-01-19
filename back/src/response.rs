@@ -105,41 +105,41 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
             }
             ResponseContent::Stream(mut reader) => {
                 use std::io::Write as _;
-                // use tokio_util::compat::FuturesAsyncReadCompatExt as _;
+                use tokio_util::compat::FuturesAsyncReadCompatExt as _;
                 // resp.streamed_body(CustomByteStream {
                 //     inner: async_read,
                 //     total_read: 0,
                 // });
-                let mut total = Vec::new();
+                // let mut total = Vec::new();
 
-                let mut buffer = [0; 10_000];
-                let mut total_read = 0;
-                let mut total_write = 0;
+                // let mut buffer = [0; 10_000];
+                // let mut total_read = 0;
+                // let mut total_write = 0;
 
-                loop {
-                    let read = reader.read(&mut buffer).unwrap();
+                // loop {
+                //     let read = reader.read(&mut buffer).unwrap();
 
-                    if read == 0 {
-                        warn!("EOF");
-                        std::thread::sleep_ms(1000);
-                        assert_eq!(reader.read(&mut buffer).unwrap(), 0);
-                        break;
-                    }
-                    total_read += read;
+                //     if read == 0 {
+                //         warn!("EOF");
+                //         std::thread::sleep_ms(1000);
+                //         assert_eq!(reader.read(&mut buffer).unwrap(), 0);
+                //         break;
+                //     }
+                //     total_read += read;
 
-                    total_write += total.write(&buffer[..read]).unwrap();
-                }
+                //     total_write += total.write(&buffer[..read]).unwrap();
+                // }
 
-                debug!("Finished decoding");
-                println!("total_read: {total_read}\ntotal_write: {total_write}");
-                resp.sized_body(total.len(), Cursor::new(total));
+                // debug!("Finished decoding");
+                // println!("total_read: {total_read}\ntotal_write: {total_write}");
+                // resp.sized_body(total.len(), Cursor::new(total));
                 // let allow = futures::io::AllowStdIo::new(async_read);
 
                 // let compat = allow.compat();
 
                 // let stream = ReaderStream::from(custom);
 
-                // resp.streamed_body(futures::io::AllowStdIo::new(async_read).compat());
+                resp.streamed_body(futures::io::AllowStdIo::new(reader).compat());
                 // let stream = async_stream::try_stream! {
 
                 //     let data: Vec::<u8> = vec![0; 10];
