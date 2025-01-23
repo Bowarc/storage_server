@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use data::CacheEntry;
 use rocket::data::{ByteUnit, DataStream, ToByteUnit};
-use tokio_util::compat::FuturesAsyncWriteCompatExt;
 use zstd::DEFAULT_COMPRESSION_LEVEL;
 
 use crate::error::CacheError;
@@ -95,60 +94,26 @@ impl Cache {
         entry
     }
 
-    pub async fn store<'r>(
+    pub async fn store(
         entry: Arc<CacheEntry>,
-        data_stream: DataStream<'r>,
+        data_stream: DataStream<'_>,
     ) -> Result<(), crate::error::CacheError> {
         assert!(!entry.is_ready());
 
         let id = entry.uuid().hyphenated().to_string();
 
-        let (res, exec_time) = time::timeit_async(|| store(entry, data_stream)).await;
+        let (res, exec_time) = time::timeit_async(|| store(entry.clone(), data_stream)).await;
 
-        let compressed_data_length = res?;
+        let original_data_length = res?;
 
         debug!(
             "[{id}] Cache was successfully compresed ({} -> {}) in {}",
-            ByteUnit::Byte(0),
-            ByteUnit::Byte(compressed_data_length),
+            ByteUnit::Byte(original_data_length),
+            ByteUnit::Byte(entry.data_size()),
             time::format(exec_time, 2)
         );
         Ok(())
     }
-    // Write a cache
-    // pub async fn store<'r>(
-    //     &mut self,
-    //     entry: Arc<CacheEntry>,
-    //     data_stream: DataStream<'r>,
-    // ) -> Result<(), crate::error::CacheError> {
-    //     use {
-    //         data::CacheEntry,
-    //         rocket::{data::ByteUnit, tokio},
-    //         std::sync::Arc,
-    //     };
-
-    //     // assert!(entry)
-
-    //     // Compress and store the given cache entry
-
-    //     // tokio::spawn(async move {
-    //     // let original_data_length = data.len() as u64;
-    //     let (res, exec_time) = time::timeit_async(|| store(entry, data_stream)).await;
-
-    //     let compressed_data_length = res?;
-
-    //     let id = uuid.hyphenated().to_string();
-
-    //     debug!(
-    //         "[{id}] Cache was successfully compresed ({} -> {}) in {}",
-    //         ByteUnit::Byte(0),
-    //         ByteUnit::Byte(compressed_data_length),
-    //         time::format(exec_time, 2)
-    //     );
-
-    //     Ok(())
-    //     // })
-    // }
 
     pub async fn get_entry(
         &self,
@@ -239,30 +204,6 @@ impl Cache {
             .open(&file_path)
             .map_err(|_| CacheError::FileOpen(file_path))?;
 
-        // {
-        //     use std::io::Read as _;
-
-        //     let mut output = Vec::new();
-        //     let mut decoder = zstd::stream::Decoder::new(file).unwrap();
-
-        //     let mut buffer = [0; 100_000];
-
-        //     let mut total_read = 0;
-        //     let mut total_write = 0;
-        //     loop {
-        //         let read = decoder.read(&mut buffer).unwrap();
-
-        //         if read == 0 {
-        //             println!("Decoding EOF");
-        //             break;
-        //         }
-        //         total_read += read;
-
-        //         total_write += output.write(&buffer[..read]).unwrap();
-        //     }
-        //     println!("total_read: {total_read}\ntotal_write: {total_write}");
-        // }
-        // panic!();
         let decoder =
             zstd::stream::Decoder::new(file).map_err(|e| CacheError::FileRead(e.to_string()))?;
 
@@ -395,18 +336,16 @@ pub fn sync_cache_files(
     Ok((meta_file, data_file))
 }
 
-async fn store_data_sync<'r>(
+async fn store_data_sync(
     id: &str,
     entry: std::sync::Arc<data::CacheEntry>,
-    mut original_data: DataStream<'r>,
+    mut original_data: DataStream<'_>,
     data_file: &mut std::fs::File,
-) -> Result<(), crate::error::CacheError> {
+) -> Result<u64, crate::error::CacheError> {
     debug!("Creating the encoder");
     let mut encoder = zstd::stream::Encoder::new(data_file, COMPRESSION_LEVEL).unwrap();
 
     debug!("Streaming . . .");
-    let mut total_read = 0;
-    let mut total_wrote = 0;
 
     // I am not too happy with that allocation, but since we're in an async context, we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
@@ -417,39 +356,26 @@ async fn store_data_sync<'r>(
     // const BUFFER_SIZE: usize = 5_000_000; // 5mb
     // const BUFFER_SIZE: usize = 500_000_000; // 500mb
     // const BUFFER_SIZE: usize = 5_000_000_000; // 5gb
-    let mut b = vec![0; BUFFER_SIZE]; // 500kb, heap
+    let mut buffer = vec![0; BUFFER_SIZE];
 
-    let mut i = 0;
+    let mut total_read = 0;
     loop {
         use rocket::tokio::io::AsyncReadExt;
-        let read = original_data.read(&mut b).await.unwrap();
+        let read = original_data.read(&mut buffer).await.unwrap();
 
         if read == 0 {
             info!("EOF");
             break;
         }
-        i += 1;
-
-        encoder.write_all(&b[..read]).unwrap();
-
         total_read += read;
-        total_wrote += read;
+
+        encoder.write_all(&buffer[..read]).unwrap();
 
         if total_read > unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() } {
             error!("Max size reached");
             panic!()
         }
-
-        // debug!(
-        //     "\nRead: {}\nWrote: {}",
-        //     ByteUnit::Byte(total_read as u64),
-        //     ByteUnit::Byte(total_wrote as u64)
-        // );
     }
-    debug!("{i} loops");
-
-    // rocket::tokio::io::copy(&mut original_data, &mut futures::io::AllowStdIo::new(encoder.auto_finish()).compat_write()).await.unwrap();
-    // std::io::copy(&mut encoder, &mut dataf);
 
     // TODO: Redo this compression error variant to allow the use of the actual error, or string idc
     let data_file = encoder.finish().map_err(|e| CacheError::Compression)?;
@@ -462,25 +388,16 @@ async fn store_data_sync<'r>(
 
     let file_size = metadata.len();
 
-    debug!("File size: {file_size}");
-
     debug!(
         "totals:\nRead: {}\nWrote: {}\nRatio: {:.3}",
         total_read,
-        total_wrote,
-        total_wrote as f64 / total_read as f64
+        file_size,
+        file_size as f64 / total_read as f64
     );
-    // debug!("Header size: {}", file_size - total_wrote as u64);
 
-    // Don't forget to update the cache entry
-    // entry.set_data_size(compressed_data_length as u64);
+    entry.set_data_size(file_size);
 
-    // if let Err(e) = data_file.write_all(&compressed_data_buffer).await {
-    //     error!("[{id}] Error while writing data file {e}");
-    //     return Err(CacheError::FileWrite(format!("data - {e}")));
-    // }
-    // entry.set_data_size(69);
-    Ok(())
+    Ok(total_read as u64)
 }
 
 async fn store_meta(
@@ -507,9 +424,9 @@ async fn store_meta(
     Ok(())
 }
 
-async fn store<'r>(
+async fn store(
     entry: std::sync::Arc<data::CacheEntry>,
-    original_data_stream: DataStream<'r>,
+    original_data_stream: DataStream<'_>,
 ) -> Result<u64, crate::error::CacheError> {
     let id = entry.uuid().hyphenated().to_string();
 
@@ -529,7 +446,7 @@ async fn store<'r>(
         Stores a compressed version of the given data.
     -----------------------------------s-------------------------------------------- */
 
-    store_data_sync(&id, entry.clone(), original_data_stream, &mut data_file).await?;
+    let original_data_length = store_data_sync(&id, entry.clone(), original_data_stream, &mut data_file).await?;
 
     /* -------------------------------------------------------------------------------
                                 Meta file
@@ -540,8 +457,8 @@ async fn store<'r>(
     ------------------------------------------------------------------------------- */
 
     store_meta(&id, entry.clone(), &mut meta_file).await?;
-
+    
     entry.set_ready(true);
 
-    Ok(entry.data_size())
+    Ok(original_data_length)
 }

@@ -1,4 +1,4 @@
-use rocket::{data::ByteUnit, http::RawStr};
+use rocket::data::ByteUnit;
 
 lazy_static! {
     static ref FILENAME_VALIDATION_REGEX: regex::Regex =
@@ -21,7 +21,7 @@ pub async fn api_upload(
     let start_timer = Instant::now();
 
     let uuid = Uuid::new_v4();
-    let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/;
+    // let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/;
 
     debug!(
         "Received new upload request \nUsing id: {uuid}\nUsername: {}\nFile name: {}",
@@ -39,37 +39,8 @@ pub async fn api_upload(
     }
 
     // let data_stream = raw_data.open(unsafe{crate::FILE_REQ_SIZE_LIMIT});
+    // File size check are done in the store data function in cache.rs
     let data_stream = raw_data.open(ByteUnit::max_value());
-
-    // let capped_data = match raw_data
-    //     .open(unsafe { crate::FILE_REQ_SIZE_LIMIT })
-    //     .into_bytes()
-    //     .await
-    // {
-    //     Ok(data) => data,
-    //     Err(e) => {
-    //         error!("[{uuid}] Could not parse given data: {e}");
-
-    //         return ResponseBuilder::default()
-    //             .with_status(Status::BadRequest)
-    //             .with_content("The given body content could not be parsed")
-    //             .with_content_type(ContentType::Text)
-    //             .build();
-    //     }
-    // };
-
-    // if !capped_data.is_complete() {
-    //     error!("Data too large");
-    //     return ResponseBuilder::default()
-    //         .with_status(Status::PayloadTooLarge)
-    //         .with_content("The given data is too large")
-    //         .with_content_type(ContentType::Text)
-    //         .build();
-    // }
-
-    // let data = capped_data.value;
-
-    // No need to decode user input as it's not b64 encoded anymore
 
     let mut cache_handle = cache.write().await;
 
@@ -82,45 +53,23 @@ pub async fn api_upload(
         ),
     );
 
+    // Release the lock to let others use it
     drop(cache_handle);
 
-    crate::cache::Cache::store(cache_entry, data_stream)
-        .await
-        .unwrap();
-
-    // Release the lock to be able to wait the end of the 'exec' without denying other calls
-    // drop(cache_handle);
-
-    // if wait_store {
-    //     debug!("[{uuid}] Waiting for cache to finish storing the data");
-
-    //     match exec.await {
-    //         Ok(()) => {
-    //             // All good
-    //         }
-    //         Err(e) => {
-    //             error!("[{uuid}] An error occured while storing the given data: {e}");
-    //             return ResponseBuilder::default()
-    //                 .with_status(Status::InternalServerError)
-    //                 .with_content("An error occured while caching the data")
-    //                 .with_content_type(ContentType::Text)
-    //                 .build();
-    //         }
-    //         // Err(join_error) => {
-    //         //     error!("[{uuid}] Something went really bad while waiting for worker task to end: {join_error}");
-    //         //     return ResponseBuilder::default()
-    //         //         .with_status(Status::InternalServerError)
-    //         //         .with_content("Worker failled")
-    //         //         .with_content_type(ContentType::Text)
-    //         //         .build();
-    //         // }
-    //     }
-    // }
+    if let Err(e) = crate::cache::Cache::store(cache_entry, data_stream).await {
+        error!("[{uuid}] An error occured while storing the given data: {e}");
+        return ResponseBuilder::default()
+            .with_status(Status::InternalServerError)
+            .with_content("An error occured while caching the data")
+            .with_content_type(ContentType::Text)
+            .build();
+    };
 
     info!(
         "[{uuid}] Responded in {}",
         time::format(start_timer.elapsed(), 2)
     );
+
     ResponseBuilder::default()
         .with_status(Status::Created)
         .with_content(uuid.hyphenated().to_string())
