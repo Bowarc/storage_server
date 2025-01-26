@@ -16,21 +16,6 @@ mod routes;
 
 static mut FILE_REQ_SIZE_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
 
-#[rocket::get("/stream")]
-pub async fn stream() -> rocket::response::stream::EventStream![] {
-    use rocket::response::stream::{Event, EventStream};
-    use rocket::tokio::time::{sleep, Duration};
-
-    let stream = EventStream! {
-        for i in 0..10 {
-            yield Event::data(format!("Message {}", i));
-            sleep(Duration::from_secs(1)).await;
-        }
-    };
-
-    stream
-}
-
 // Needed for tests
 pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     let Some(cache) = cache::Cache::new() else {
@@ -48,7 +33,6 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
         .mount(
             "/",
             rocket::routes![
-                stream,
                 routes::root,
                 routes::front_js,
                 routes::front_bg_wasm,

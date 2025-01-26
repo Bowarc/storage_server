@@ -167,6 +167,7 @@ async fn static_file_response(
         Some(buffer)
     }
 
+    // here we coul maybe use streaming
     match read_static(path, remote_addr).await {
         Some(bytes) => ResponseBuilder::default()
             .with_status(Status::Ok)
