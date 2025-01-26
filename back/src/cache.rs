@@ -1,5 +1,5 @@
-use std::io::Write;
 use std::sync::Arc;
+use std::{io::Write, str::FromStr};
 
 use data::CacheEntry;
 use rocket::data::{ByteUnit, DataStream, ToByteUnit};
@@ -54,7 +54,11 @@ impl Cache {
                     return None;
                 }
                 let path = entry.path();
-                let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                let Some(id) = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .and_then(|s| uuid::Uuid::from_str(s).ok())
+                else {
                     warn!(
                         "Could not extract id from cache file '{}'",
                         display_path(path)
@@ -125,7 +129,7 @@ impl Cache {
             .inner
             .iter()
             .find(|e| e.uuid() == uuid)
-            .ok_or(CacheError::NotFound)?
+            .ok_or(CacheError::NotFound { uuid })?
             // Could use .as_ref but it would require keeping the cache lock alive as look as we use the reference and i don't like that
             .clone())
     }
@@ -147,10 +151,10 @@ impl Cache {
             .inner
             .iter()
             .find(|e| e.uuid() == uuid)
-            .ok_or(CacheError::NotFound)?;
+            .ok_or(CacheError::NotFound { uuid })?;
 
         if !entry.is_ready() {
-            return Err(CacheError::NotReady);
+            return Err(CacheError::NotReady { uuid });
         }
 
         let mut data_compressed = Vec::new();
@@ -159,15 +163,18 @@ impl Cache {
 
         let file_path = format!("{CACHE_DIRECTORY}/{id}.data");
 
-        if let Err(e) = fs::File::open(&file_path)
+        fs::File::open(&file_path)
             .await
-            .map_err(|_| CacheError::FileOpen(file_path))?
+            .map_err(|why| CacheError::FileOpen {
+                file: file_path.clone(),
+                why,
+            })?
             .read_to_end(&mut data_compressed)
             .await
-        {
-            error!("[{id}] Unable to read the data file: {e}");
-            return Err(CacheError::FileRead(format!("{e}")));
-        }
+            .map_err(|e| CacheError::FileRead {
+                file: file_path,
+                why: e,
+            })?;
 
         let mut data = Vec::new();
         if let Err(e) = BrotliDecompress(&mut std::io::Cursor::new(data_compressed), &mut data) {
@@ -189,10 +196,10 @@ impl Cache {
             .inner
             .iter()
             .find(|e| e.uuid() == uuid)
-            .ok_or(CacheError::NotFound)?;
+            .ok_or(CacheError::NotFound { uuid })?;
 
         if !entry.is_ready() {
-            return Err(CacheError::NotReady);
+            return Err(CacheError::NotReady { uuid });
         }
 
         let id = uuid.hyphenated().to_string();
@@ -202,10 +209,15 @@ impl Cache {
         let file = std::fs::OpenOptions::new()
             .read(true)
             .open(&file_path)
-            .map_err(|_| CacheError::FileOpen(file_path))?;
+            .map_err(|e| CacheError::FileOpen {
+                file: file_path.clone(),
+                why: e,
+            })?;
 
-        let decoder =
-            zstd::stream::Decoder::new(file).map_err(|e| CacheError::FileRead(e.to_string()))?;
+        let decoder = zstd::stream::Decoder::new(file).map_err(|e| CacheError::FileOpen {
+            file: file_path,
+            why: e,
+        })?;
 
         Ok((entry.upload_info().clone(), Box::new(decoder)))
     }
@@ -213,15 +225,14 @@ impl Cache {
 
 // try read a specific cache from file
 fn read_cache(
-    id: &str,
+    uuid: uuid::Uuid,
     path: std::path::PathBuf,
 ) -> Result<std::sync::Arc<data::CacheEntry>, crate::error::CacheError> {
     use {
         crate::error::CacheError,
         data::{CacheEntry, Metadata},
         rocket::serde::json::serde_json,
-        std::{fs, str::FromStr as _, sync::Arc},
-        uuid::Uuid,
+        std::{fs, sync::Arc},
     };
 
     // let file_content: serde_json::Value = serde_json::from_str(
@@ -234,12 +245,14 @@ fn read_cache(
 
     let metadata: Metadata =
         serde_json::from_str(&fs::read_to_string(path.clone()).map_err(|e| {
-            error!("Could not open cache file '{id}' due to: {e}");
-            CacheError::FileRead("meta".to_string())
+            CacheError::FileRead {
+                file: path.display().to_string(),
+                why: e,
+            }
         })?)
-        .map_err(|e| {
-            error!("Could not deserialize cache file '{id}' due to: {e}");
-            CacheError::Deserialization
+        .map_err(|e| CacheError::Deserialization {
+            file: path.display().to_string(),
+            why: e,
         })?;
 
     // let Some(username) = file_content
@@ -292,14 +305,7 @@ fn read_cache(
     //     data_size: AtomicUsize::new(data_size),
     // }))
 
-    Ok(Arc::new(CacheEntry::from_metadata(
-        Uuid::from_str(id).map_err(|e| {
-            error!("Could not transform id '{id}' to a usable uuid due to: {e}");
-            CacheError::InvalidId(id.to_string())
-        })?,
-        metadata,
-        true,
-    )))
+    Ok(Arc::new(CacheEntry::from_metadata(uuid, metadata, true)))
 }
 
 // This tries to create the .meta and .data files
@@ -314,30 +320,34 @@ pub fn sync_cache_files(
         .create_new(true)
         .write(true)
         .open(&meta_path)
-        .map_err(|e| {
-            CacheError::FileCreate(format!(
-                "Failed to create meta file with path: '{meta_path}' due to: {e}"
-            ))
+        .map_err(|e| CacheError::FileCreate {
+            file: meta_path.clone(),
+            why: e,
         })?;
 
     let data_file = OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(&data_path).map_err(|e|{
-            if let Err(remove_e) = remove_file(&meta_path){
-                return CacheError::FileOpen(format!("Failed to delete meta file with path '{meta_path}' due to: {remove_e} while cleaning after a fail to create data file with path '{data_path}' due to: {e}"));
+        .open(&data_path)
+        .map_err(|e| {
+            if let Err(remove_e) = remove_file(&meta_path) {
+                return CacheError::FileRemove {
+                    file: meta_path,
+                    why: remove_e,
+                };
             }
 
-             CacheError::FileCreate(format!(
-                "Failed to create data file with path: '{data_path}' due to: {e}"
-            ))
+            CacheError::FileCreate {
+                file: data_path,
+                why: e,
+            }
         })?;
 
     Ok((meta_file, data_file))
 }
 
 async fn store_data_sync(
-    id: &str,
+    uuid: &uuid::Uuid,
     entry: std::sync::Arc<data::CacheEntry>,
     mut original_data: DataStream<'_>,
     data_file: &mut std::fs::File,
@@ -373,17 +383,17 @@ async fn store_data_sync(
 
         if total_read > unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() } {
             error!("Max size reached");
-            panic!()
+            return Err(CacheError::FileSizeExceeded);
         }
     }
 
-    // TODO: Redo this compression error variant to allow the use of the actual error, or string idc
-    let data_file = encoder.finish().map_err(|e| CacheError::Compression)?;
+    let data_file = encoder
+        .finish()
+        .map_err(|e| CacheError::Compression { why: e })?;
 
-    let metadata = data_file.metadata().map_err(|e| {
-        CacheError::FileRead(format!(
-            "Could not read the metadata of data file '{id}' due to: {e}"
-        ))
+    let metadata = data_file.metadata().map_err(|e| CacheError::FileRead {
+        file: format!("(data file for uuid ({uuid})"),
+        why: e,
     })?;
 
     let file_size = metadata.len();
@@ -401,7 +411,7 @@ async fn store_data_sync(
 }
 
 async fn store_meta(
-    id: &str,
+    uuid: &uuid::Uuid,
     entry: std::sync::Arc<data::CacheEntry>,
     meta_file: &mut std::fs::File,
 ) -> Result<(), crate::error::CacheError> {
@@ -409,16 +419,18 @@ async fn store_meta(
 
     let metadata = entry.build_metadata();
 
-    let meta = serde_json::to_string_pretty(&metadata).map_err(|e| {
-        error!("[{id}] Could not create meta json object due to: {e}");
-        CacheError::Serialization
+    let meta = serde_json::to_string_pretty(&metadata).map_err(|e| CacheError::Serialization {
+        context: String::from("writing meta data"),
+        why: e,
     })?;
 
     // let meta = ; // Cannot inline with the above due to lifetime issues
 
     if let Err(e) = meta_file.write_all(meta.as_bytes()) {
-        error!("Failled to write meta file: {e}");
-        return Err(CacheError::FileWrite(format!("meta - {e}")));
+        return Err(CacheError::FileWrite {
+            file: format!("(meta file for uuid ({uuid}))"),
+            why: e,
+        });
     }
 
     Ok(())
@@ -428,7 +440,8 @@ async fn store(
     entry: std::sync::Arc<data::CacheEntry>,
     original_data_stream: DataStream<'_>,
 ) -> Result<u64, crate::error::CacheError> {
-    let id = entry.uuid().hyphenated().to_string();
+    let uuid = entry.uuid();
+    let id = uuid.hyphenated().to_string();
 
     // let (mut meta_file, mut data_file) = create_files(
     //     format!("{CACHE_DIRECTORY}/{id}.meta"),
@@ -446,7 +459,8 @@ async fn store(
         Stores a compressed version of the given data.
     -----------------------------------s-------------------------------------------- */
 
-    let original_data_length = store_data_sync(&id, entry.clone(), original_data_stream, &mut data_file).await?;
+    let original_data_length =
+        store_data_sync(&uuid, entry.clone(), original_data_stream, &mut data_file).await?;
 
     /* -------------------------------------------------------------------------------
                                 Meta file
@@ -456,8 +470,8 @@ async fn store(
         -- partially true, we mainly have a 'ready' atomic bool for this
     ------------------------------------------------------------------------------- */
 
-    store_meta(&id, entry.clone(), &mut meta_file).await?;
-    
+    store_meta(&uuid, entry.clone(), &mut meta_file).await?;
+
     entry.set_ready(true);
 
     Ok(original_data_length)

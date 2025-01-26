@@ -10,7 +10,6 @@ name = "front"
 path = "src/main.rs"
 
 [dependencies]
-shared = { path ="../shared" }
 time.workspace = true
 gloo = "0.11.0" # Yew depends on this version
 js-sys = "0.3.70"

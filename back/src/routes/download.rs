@@ -71,7 +71,7 @@ pub async fn api_download(
 
     let (meta, data_stream) = match load_result {
         Ok(meta_data) => meta_data,
-        Err(CacheError::NotReady) => {
+        Err(CacheError::NotReady { uuid }) => {
             error!("[{uuid}] The requested cache is not ready yet");
             return ResponseBuilder::default()
                 .with_status(Status::NotFound)
@@ -79,7 +79,7 @@ pub async fn api_download(
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        Err(CacheError::NotFound) => {
+        Err(CacheError::NotFound { uuid }) => {
             error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
             return ResponseBuilder::default()
                 .with_status(Status::NotFound)
@@ -87,16 +87,16 @@ pub async fn api_download(
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        Err(CacheError::FileOpen(e)) => {
-            error!("[{uuid}] Failled to open data file of [{uuid}] due to: {e}");
+        Err(CacheError::FileOpen{file, why}) => {
+            error!("[{uuid}] Failled to open data file ({file}) due to: {why}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
                 .with_content("Could not access given cache entry")
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        Err(CacheError::FileRead(e)) => {
-            error!("[{uuid}] Failled to read cache of [{uuid}] due to: {e}");
+        Err(CacheError::FileRead{file, why}) => {
+            error!("[{uuid}] Failled to read {file} due to: {why}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
                 .with_content_type(ContentType::Text)
