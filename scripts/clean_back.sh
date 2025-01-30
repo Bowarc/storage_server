@@ -1,2 +1,2 @@
-rm -r ./cache/*
-rm ./log/server.log
+rm ./cache/*
+rm ./log/*

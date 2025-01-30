@@ -1,4 +1,4 @@
-use gloo::console::log;
+use gloo::{console::log, file::BlobContents};
 
 static CURRENT_LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 // const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
@@ -21,8 +21,8 @@ enum FileState {
 
 struct UserFile {
     local_id: u32,
-    name: String,
-    data: Option<Vec<u8>>,
+    name: String, 
+    inner: gloo::file::File,
     state: FileState,
 }
 
@@ -33,7 +33,6 @@ pub enum Message {
     Load(gloo::file::File),
     Loaded {
         local_id: u32,
-        data: Vec<u8>,
     },
     Upload,
     Uploaded {
@@ -51,7 +50,7 @@ pub enum Message {
 }
 
 pub struct Upload {
-    readers: std::collections::HashMap<u32, gloo::file::callbacks::FileReader>,
+    // readers: std::collections::HashMap<u32, gloo::file::callbacks::FileReader>,
     files: Vec<UserFile>,
 }
 
@@ -61,13 +60,13 @@ impl yew::Component for Upload {
 
     fn create(_ctx: &yew::Context<Self>) -> Self {
         Self {
-            readers: std::collections::HashMap::default(),
+            // readers: std::collections::HashMap::default(),
             files: Vec::default(),
         }
     }
 
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
-        use {crate::component, gloo::file::callbacks};
+        use crate::component;
 
         match msg {
             Message::Void => false,
@@ -85,7 +84,7 @@ impl yew::Component for Upload {
             Message::CopiedToClipboard(_content) => {
                 component::push_notification(crate::component::Notification::info(
                     "Copied to clipboard",
-                    vec!["A link to your file was copied to clipboard\nshare it to anyone to give them access !"],
+                    vec!["A link to your file was copied to clipboard\nshare it to anyone to give them access to your file !"],
                     5.,
                 ));
                 true
@@ -93,33 +92,23 @@ impl yew::Component for Upload {
             Message::Load(file) => {
                 let local_id = new_local_id();
 
+
                 self.files.push(UserFile {
                     local_id,
-                    data: None,
                     // This isn't a security, as client side security are dumb imo,
                     // this is just to make sure that the normal user can upload it's file without too much trouble
                     name: file.name().replace([' ', '/', '\\', '\'', '’'], "_"),
+                    inner: file,
                     state: FileState::Loading,
                 });
 
                 let link = ctx.link().clone();
 
-                let task = callbacks::read_as_bytes(&file, move |res| {
-                    let message = match res {
-                        Ok(data) => Message::Loaded { local_id, data },
-                        Err(e) => {
-                            Message::Error(format!("Could not load given file due to: {e:?}"))
-                        }
-                    };
+                link.send_message(Message::Loaded { local_id });
 
-                    link.send_message(message)
-                });
-
-                self.readers.insert(local_id, task);
                 true
             }
-            Message::Loaded { local_id, data } => {
-                self.readers.remove(&local_id);
+            Message::Loaded { local_id } => {
 
                 let Some(file) = self.files.iter_mut().find(|f| f.local_id == local_id) else {
                     log!(format!("[Error] Could not get file ({local_id}) from list"));
@@ -133,33 +122,33 @@ impl yew::Component for Upload {
                     return true;
                 };
 
-                let data_size = data.len();
+                // let data_size = data.len();
+                let data_size = file.inner.size();
 
-                if data_size > SIZE_LIMIT_BYTES {
-                    component::push_notification(component::Notification::error(
-                        "File too large",
-                        vec![
-                            &format!("File: {}", file.name),
-                            &format!("File size: {:.0} MB", data_size as f64 / (1024. * 1024.)),
-                            &format!(
-                                "Max size: {:.0} MB",
-                                SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)
-                            ),
-                        ],
-                        5.,
-                    ));
-                    self.files.retain(|f| f.local_id != local_id);
-                    return true;
-                }
+                // if data_size > SIZE_LIMIT_BYTES {
+                //     component::push_notification(component::Notification::error(
+                //         "File too large",
+                //         vec![
+                //             &format!("File: {}", file.name),
+                //             &format!("File size: {:.0} MB", data_size as f64 / (1024. * 1024.)),
+                //             &format!(
+                //                 "Max size: {:.0} MB",
+                //                 SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)
+                //             ),
+                //         ],
+                //         5.,
+                //     ));
+                //     self.files.retain(|f| f.local_id != local_id);
+                //     return true;
+                // }
 
-                file.data = Some(data);
                 file.state = FileState::Local;
 
                 {
                     component::push_notification(component::Notification::info(
                         "Loaded file",
                         vec![
-                            &format!("File name: {}", file.name),
+                            &format!("File name: {:?}", file.name()),
                             &format!("File size: {:.1}mb", data_size as f64 / (1024. * 1024.)),
                         ],
                         5.,
@@ -179,11 +168,9 @@ impl yew::Component for Upload {
                         log!(format!("File ({local_id})'s state is not local"));
                         continue;
                     }
-                    let Some(data) = file.data.clone() else {
-                        // File not yet loaded
-                        continue;
-                    };
-                    let name = file.name().unwrap_or_default();
+
+                    let gloofile = file.inner.clone(); 
+                    let name = file.name();
                     let ext = file.extension().unwrap_or_default();
 
                     file.state = FileState::Uploading;
@@ -195,13 +182,7 @@ impl yew::Component for Upload {
                         reqinit.set_method("PUT");
                         reqinit.set_mode(web_sys::RequestMode::Cors);
 
-                        //
-                        //  Safety:
-                        //      The original data won't be accessed before that object is destroyed
-                        //
-                        let data_uint8_array = unsafe { js_sys::Uint8Array::view(&data) };
-
-                        reqinit.set_body(&data_uint8_array);
+                        reqinit.set_body(&(*gloofile).clone().into());
 
                         let request = match web_sys::Request::new_with_str_and_init(
                             &format!("/{name}.{ext}"),
@@ -563,6 +544,7 @@ impl Upload {
 }
 
 impl UserFile {
+    // Returns the extension if any
     fn extension(&self) -> Option<String> {
         let name = &self.name;
 
@@ -575,15 +557,16 @@ impl UserFile {
         Some(String::from(&name[(dot_index + 1)..name.len()]))
     }
 
-    fn name(&self) -> Option<String> {
+    // return the file name, till the first .
+    fn name(&self) -> String {
         let name = &self.name;
 
-        if !name.contains(".") {
-            return None;
-        }
+        // if !name.contains(".") {
+        //     return None;
+        // }
 
-        let dot_index = name.rfind(".").unwrap();
+        let dot_index = name.rfind(".").unwrap_or(self.name.len());
 
-        Some(String::from(&name[0..dot_index]))
+        String::from(&name[0..dot_index])
     }
 }
