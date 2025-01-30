@@ -1,11 +1,3 @@
-use crate::response::ResponseBuilder;
-
-use {
-    crate::response::Response,
-    rocket::http::{ContentType, Status},
-    std::net::SocketAddr,
-};
-
 #[path = "routes/dashboard.rs"]
 mod dashboard_route;
 #[path = "routes/download.rs"]
@@ -22,39 +14,49 @@ use rocket::tokio::io::AsyncReadExt;
 pub use upload_route::*;
 
 #[rocket::get("/")]
-pub async fn root(remote_addr: SocketAddr) -> Response {
-    let _old_msg = "
-
-        Hi, please take a look at the /examples directory to understand how to use this api
-    ";
+pub async fn root(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+    use rocket::http::ContentType;
 
     static_file_response("index.html", ContentType::HTML, remote_addr).await
 }
 
 #[rocket::get("/front.js")]
-pub async fn front_js(remote_addr: SocketAddr) -> Response {
+pub async fn front_js(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+    use rocket::http::ContentType;
+    
     static_file_response("/front.js", ContentType::JavaScript, remote_addr).await
 }
 
 #[rocket::get("/front_bg.wasm")]
-pub async fn front_bg_wasm(remote_addr: SocketAddr) -> Response {
+pub async fn front_bg_wasm(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+    use rocket::http::ContentType;
+
     static_file_response("/front_bg.wasm", ContentType::WASM, remote_addr).await
 }
 
 #[rocket::get("/index.html")]
-pub async fn index_html(remote_addr: SocketAddr) -> Response {
+pub async fn index_html(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+    use rocket::http::ContentType;
+    
     static_file_response("/index.html", ContentType::HTML, remote_addr).await
 }
 
 #[rocket::get("/favicon.ico")]
-pub async fn favicon_ico(remote_addr: SocketAddr) -> Response {
+pub async fn favicon_ico(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+    use rocket::http::ContentType;
+
     static_file_response("favicon.ico", ContentType::Icon, remote_addr).await
 }
 
 // The goal of this method, is to not use FileServer (because i wanna make sure of what file i serve)
 // but i can't do #[rocket::get("/<file>")] as i want to use the get root path for the download api
 #[rocket::get("/resources/<file>")]
-pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
+pub async fn static_resource(
+    file: &str,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::Status;
+
     #[rustfmt::skip]
     const ALLOWED_FILES: &[&str] = &[
         "bash.webp", "c.webp", "cpp.webp",
@@ -70,7 +72,7 @@ pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
     ];
 
     if !ALLOWED_FILES.contains(&file) {
-        return ResponseBuilder::default()
+        return crate::response::ResponseBuilder::default()
             .with_status(Status::NotFound)
             .build();
     }
@@ -79,7 +81,12 @@ pub async fn static_resource(file: &str, remote_addr: SocketAddr) -> Response {
 }
 
 #[rocket::get("/css/<file>")]
-pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
+pub async fn static_css(
+    file: &str,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::Status;
+
     const ALLOWED_FILES: &[&str] = &[
         "contact.css",
         "home.css",
@@ -90,7 +97,7 @@ pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
     ];
 
     if !ALLOWED_FILES.contains(&file) {
-        return ResponseBuilder::default()
+        return crate::response::ResponseBuilder::default()
             .with_status(Status::NotFound)
             .build();
     }
@@ -99,11 +106,16 @@ pub async fn static_css(file: &str, remote_addr: SocketAddr) -> Response {
 }
 
 #[rocket::get("/lib/live/<file>")]
-pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
+pub async fn static_lib_live(
+    file: &str,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::Status;
+
     const ALLOWED_FILES: &[&str] = &["live.js"];
 
     if !ALLOWED_FILES.contains(&file) {
-        return ResponseBuilder::default()
+        return crate::response::ResponseBuilder::default()
             .with_status(Status::NotFound)
             .build();
     }
@@ -112,11 +124,16 @@ pub async fn static_lib_live(file: &str, remote_addr: SocketAddr) -> Response {
 }
 
 #[rocket::get("/lib/zoom/<file>")]
-pub async fn static_lib_zoom(file: &str, remote_addr: SocketAddr) -> Response {
+pub async fn static_lib_zoom(
+    file: &str,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::Status;
+    
     const ALLOWED_FILES: &[&str] = &["zoom.js", "zoom.css"];
 
     if !ALLOWED_FILES.contains(&file) {
-        return ResponseBuilder::default()
+        return crate::response::ResponseBuilder::default()
             .with_status(Status::NotFound)
             .build();
     }
@@ -124,7 +141,13 @@ pub async fn static_lib_zoom(file: &str, remote_addr: SocketAddr) -> Response {
     serve_static("/lib/zoom", file, remote_addr).await
 }
 
-pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Response {
+pub async fn serve_static(
+    path: &str,
+    file: &str,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::ContentType;
+    
     #[inline]
     fn ext(file_name: &str) -> Option<&str> {
         if !file_name.contains(".") {
@@ -150,10 +173,12 @@ pub async fn serve_static(path: &str, file: &str, remote_addr: SocketAddr) -> Re
 
 async fn static_file_response(
     path: &str,
-    content_type: ContentType,
-    remote_addr: SocketAddr,
-) -> Response {
-    async fn read_static(path: &str, remote_addr: SocketAddr) -> Option<Vec<u8>> {
+    content_type: rocket::http::ContentType,
+    remote_addr: std::net::SocketAddr,
+) -> crate::response::Response {
+    use rocket::http::Status;
+
+    async fn read_static(path: &str, remote_addr: std::net::SocketAddr) -> Option<Vec<u8>> {
         let mut buffer = Vec::new();
 
         let size = rocket::tokio::fs::File::open(format!("./static/{path}"))
@@ -169,45 +194,13 @@ async fn static_file_response(
 
     // here we coul maybe use streaming
     match read_static(path, remote_addr).await {
-        Some(bytes) => ResponseBuilder::default()
+        Some(bytes) => crate::response::ResponseBuilder::default()
             .with_status(Status::Ok)
             .with_content(bytes)
             .with_content_type(content_type)
             .build(),
-        None => ResponseBuilder::default()
+        None => crate::response::ResponseBuilder::default()
             .with_status(Status::NotFound)
             .build(),
     }
 }
-
-// #[rocket::options("/upload")]
-// pub async fn upload_option() -> crate::response::JsonApiResponse {
-//     /*
-//         We're currently having issues connecting a NextJs server to this storage server
-
-//         we belive that his might help
-//         but we have no idea what to set here and in the NextJs config
-
-//         The thing is that test_upload (in front/main.rs) works fine, and do somewaht the same thing as the NextJs
-
-//         CORS errors..
-//     */
-//     warn!("option req");
-//     crate::response::JsonApiResponseBuilder::default()
-//         .with_status(Status::NoContent)
-//         .with_header("Content-Type", "text/plain")
-//         // .with_header("Access-Control-Allow-Origin", "*")
-//         // .with_header("Access-Control-Allow-Method", "POST")
-//         // .with_header("Access-Control-Allow-Headers", "X-PINGOTHER, Content-Type")
-//         // .with_header("Content-Type", "text/plain")
-//         // .with_header("Access-Control-Allow-Origin", "*")
-//         // .with_header("Access-Control-Allow-Cedentials", "true")
-//         // .with_header("Access-Control-Expose-Headers", "*")
-//         // .with_header("Access-Control-Max-Age", "5")
-//         // .with_header("Access-Control-Allow-Method", "POST,OPTIONS,GET")
-//         // .with_header(
-//         //     "Access-Control-Allow-Headers",
-//         //     "Content-Type",
-//         // )
-//         .build()
-// }

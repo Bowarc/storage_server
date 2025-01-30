@@ -32,12 +32,14 @@ pub async fn api_download(
 ) -> crate::response::Response {
     use {
         crate::{
+            cache::Cache,
             error::{CacheError, UuidParseError},
             response::ResponseBuilder,
         },
         rocket::http::{ContentType, Status},
         std::time::Instant,
     };
+
     let start_timer = Instant::now();
 
     info!("Request of {id}");
@@ -64,7 +66,20 @@ pub async fn api_download(
 
     let cache_handle = cache.read().await;
 
-    let load_result = cache_handle.load_stream(uuid).await;
+    let cache_entry = match cache_handle.get_entry(uuid).await{
+        Ok(entry) => entry,
+        Err(CacheError::NotFound { uuid }) => {
+            error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
+            return ResponseBuilder::default()
+                .with_status(Status::NotFound)
+                .with_content("The given id doesn't correspond to any cache entry")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
+        _ => unreachable!()
+    };
+
+    let load_result = Cache::load(cache_entry);
 
     // Keep the lock for the minimum amount of time
     drop(cache_handle);
@@ -76,14 +91,6 @@ pub async fn api_download(
             return ResponseBuilder::default()
                 .with_status(Status::NotFound)
                 .with_content("The requested cache is not ready yet")
-                .with_content_type(ContentType::Text)
-                .build();
-        }
-        Err(CacheError::NotFound { uuid }) => {
-            error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
-            return ResponseBuilder::default()
-                .with_status(Status::NotFound)
-                .with_content("The given id doesn't correspond to any cache entry")
                 .with_content_type(ContentType::Text)
                 .build();
         }

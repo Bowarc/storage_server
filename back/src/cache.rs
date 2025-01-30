@@ -1,19 +1,10 @@
-use std::sync::Arc;
-use std::{io::Write, str::FromStr};
-
-use data::CacheEntry;
-use rocket::data::{ByteUnit, DataStream, ToByteUnit};
-use zstd::DEFAULT_COMPRESSION_LEVEL;
-
-use crate::error::CacheError;
-
 pub mod data;
 
 #[cfg(not(test))]
 const CACHE_DIRECTORY: &str = "./cache";
 #[cfg(test)]
 const CACHE_DIRECTORY: &str = "../cache"; // For some reason, tests launch path is ./back
-const COMPRESSION_LEVEL: i32 = DEFAULT_COMPRESSION_LEVEL; // 3, 1..=22 (zstd)
+const COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL; // 3, 1..=22 (zstd)
 
 #[derive(Default)]
 pub struct Cache {
@@ -36,6 +27,8 @@ impl Cache {
         let inner = files
             .flatten()
             .flat_map(|entry| {
+                use std::str::FromStr as _;
+
                 let metadata = entry
                     .metadata()
                     .map_err(|e| {
@@ -91,32 +84,12 @@ impl Cache {
         &mut self,
         uuid: uuid::Uuid,
         upload_info: data::UploadInfo,
-    ) -> Arc<CacheEntry> {
+    ) -> std::sync::Arc<data::CacheEntry> {
+        use {data::CacheEntry, std::sync::Arc};
         let entry = Arc::new(CacheEntry::new(uuid, upload_info));
         self.inner.push(entry.clone());
 
         entry
-    }
-
-    pub async fn store(
-        entry: Arc<CacheEntry>,
-        data_stream: DataStream<'_>,
-    ) -> Result<(), crate::error::CacheError> {
-        assert!(!entry.is_ready());
-
-        let id = entry.uuid().hyphenated().to_string();
-
-        let (res, exec_time) = time::timeit_async(|| store(entry.clone(), data_stream)).await;
-
-        let original_data_length = res?;
-
-        debug!(
-            "[{id}] Cache was successfully compresed ({} -> {}) in {}",
-            ByteUnit::Byte(original_data_length),
-            ByteUnit::Byte(entry.data_size()),
-            time::format(exec_time, 2)
-        );
-        Ok(())
     }
 
     pub async fn get_entry(
@@ -134,69 +107,37 @@ impl Cache {
             .clone())
     }
 
-    // Load a stored cache
-    pub async fn load(
-        &self,
-        uuid: uuid::Uuid,
-    ) -> Result<(data::UploadInfo, Vec<u8>), crate::error::CacheError> {
-        use {
-            crate::error::CacheError,
-            brotli::BrotliDecompress,
-            rocket::tokio::{fs, io::AsyncReadExt},
-        };
+    pub async fn store(
+        entry: std::sync::Arc<data::CacheEntry>,
+        data_stream: rocket::data::DataStream<'_>,
+    ) -> Result<(), crate::error::CacheError> {
+        use rocket::data::ByteUnit;
 
-        // Load and decompress the given cache entry
+        assert!(!entry.is_ready());
 
-        let entry = self
-            .inner
-            .iter()
-            .find(|e| e.uuid() == uuid)
-            .ok_or(CacheError::NotFound { uuid })?;
+        let id = entry.uuid().hyphenated().to_string();
 
-        if !entry.is_ready() {
-            return Err(CacheError::NotReady { uuid });
-        }
+        let (res, exec_time) = time::timeit_async(|| store(entry.clone(), data_stream)).await;
 
-        let mut data_compressed = Vec::new();
+        let original_data_length = res?;
 
-        let id = uuid.hyphenated().to_string();
-
-        let file_path = format!("{CACHE_DIRECTORY}/{id}.data");
-
-        fs::File::open(&file_path)
-            .await
-            .map_err(|why| CacheError::FileOpen {
-                file: file_path.clone(),
-                why,
-            })?
-            .read_to_end(&mut data_compressed)
-            .await
-            .map_err(|e| CacheError::FileRead {
-                file: file_path,
-                why: e,
-            })?;
-
-        let mut data = Vec::new();
-        if let Err(e) = BrotliDecompress(&mut std::io::Cursor::new(data_compressed), &mut data) {
-            error!("[{id}] Decompression failed: {e}");
-            return Err(CacheError::Decompression);
-        }
-
-        Ok((entry.upload_info().clone(), data))
+        debug!(
+            "[{id}] Cache was successfully compresed ({} -> {}) in {}",
+            ByteUnit::Byte(original_data_length),
+            ByteUnit::Byte(entry.data_size()),
+            time::format(exec_time, 2)
+        );
+        Ok(())
     }
 
-    pub async fn load_stream(
-        &self,
-        uuid: uuid::Uuid,
+    // Load a stored cache
+    pub fn load(
+        entry: std::sync::Arc<data::CacheEntry>,
     ) -> Result<(data::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError> {
         use crate::error::CacheError;
         // Load and decompress the given cache entry
 
-        let entry = self
-            .inner
-            .iter()
-            .find(|e| e.uuid() == uuid)
-            .ok_or(CacheError::NotFound { uuid })?;
+        let uuid = entry.uuid();
 
         if !entry.is_ready() {
             return Err(CacheError::NotReady { uuid });
@@ -313,8 +254,11 @@ fn read_cache(
 pub fn sync_cache_files(
     meta_path: String,
     data_path: String,
-) -> Result<(std::fs::File, std::fs::File), CacheError> {
-    use std::fs::{remove_file, OpenOptions};
+) -> Result<(std::fs::File, std::fs::File), crate::error::CacheError> {
+    use {
+        crate::error::CacheError,
+        std::fs::{remove_file, OpenOptions},
+    };
 
     let meta_file = OpenOptions::new()
         .create_new(true)
@@ -349,9 +293,14 @@ pub fn sync_cache_files(
 async fn store_data_sync(
     uuid: &uuid::Uuid,
     entry: std::sync::Arc<data::CacheEntry>,
-    mut original_data: DataStream<'_>,
+    mut original_data: rocket::data::DataStream<'_>,
     data_file: &mut std::fs::File,
 ) -> Result<u64, crate::error::CacheError> {
+    use {
+        crate::error::CacheError, rocket::data::ToByteUnit as _,
+        rocket::tokio::io::AsyncReadExt as _, std::io::Write as _,
+    };
+
     debug!("Creating the encoder");
     let mut encoder = zstd::stream::Encoder::new(data_file, COMPRESSION_LEVEL).unwrap();
 
@@ -370,7 +319,6 @@ async fn store_data_sync(
 
     let mut total_read = 0;
     loop {
-        use rocket::tokio::io::AsyncReadExt;
         let read = original_data.read(&mut buffer).await.unwrap();
 
         if read == 0 {
@@ -415,7 +363,7 @@ async fn store_meta(
     entry: std::sync::Arc<data::CacheEntry>,
     meta_file: &mut std::fs::File,
 ) -> Result<(), crate::error::CacheError> {
-    use {crate::error::CacheError, rocket::serde::json::serde_json};
+    use {crate::error::CacheError, rocket::serde::json::serde_json, std::io::Write as _};
 
     let metadata = entry.build_metadata();
 
@@ -438,7 +386,7 @@ async fn store_meta(
 
 async fn store(
     entry: std::sync::Arc<data::CacheEntry>,
-    original_data_stream: DataStream<'_>,
+    original_data_stream: rocket::data::DataStream<'_>,
 ) -> Result<u64, crate::error::CacheError> {
     let uuid = entry.uuid();
     let id = uuid.hyphenated().to_string();

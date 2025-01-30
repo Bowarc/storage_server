@@ -22,8 +22,7 @@ enum FileState {
 struct UserFile {
     local_id: u32,
     name: String,
-    file_type: String,
-    data64: Option<Vec<u8>>, // Encoded to base64
+    data: Option<Vec<u8>>,
     state: FileState,
 }
 
@@ -96,11 +95,10 @@ impl yew::Component for Upload {
 
                 self.files.push(UserFile {
                     local_id,
-                    data64: None,
+                    data: None,
                     // This isn't a security, as client side security are dumb imo,
                     // this is just to make sure that the normal user can upload it's file without too much trouble
                     name: file.name().replace([' ', '/', '\\', '\'', '’'], "_"),
-                    file_type: file.raw_mime_type(),
                     state: FileState::Loading,
                 });
 
@@ -154,7 +152,7 @@ impl yew::Component for Upload {
                     return true;
                 }
 
-                file.data64 = Some(data);
+                file.data = Some(data);
                 file.state = FileState::Local;
 
                 {
@@ -181,7 +179,7 @@ impl yew::Component for Upload {
                         log!(format!("File ({local_id})'s state is not local"));
                         continue;
                     }
-                    let Some(data) = file.data64.clone() else {
+                    let Some(data) = file.data.clone() else {
                         // File not yet loaded
                         continue;
                     };
