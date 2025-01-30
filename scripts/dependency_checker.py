@@ -6,7 +6,8 @@
     This script ensure that:
         1) Every global dependency used by at least GLOBAL_DEP_THRESHOLD package(s)
         2) No global dependency is imported as specific dependency
-        3) Every dependency used by 2 or more packages is a global dependency (no double import which could be bad, I.E different versions)            
+        3) Every dependency used by 2 or more packages is a global dependency
+            (no double import which could be bad, I.E different versions)
         4) Every dependency of every package is used (no unused imports)
 
     Requirements:
@@ -62,9 +63,9 @@ class Dependencies:
         return self.specifics + self.globals
 
     def fetch(self) -> None:
-        cargo_toml: str = os.path.join(self.path, "cargo.toml")
+        cargo_toml: str = os.path.join(self.path, "Cargo.toml")
         try:
-            with open(cargo_toml, "r") as f:
+            with open(cargo_toml, "r", encoding="utf-8") as f:
                 found_dependencies: bool = False
 
                 for line in f:
@@ -79,8 +80,11 @@ class Dependencies:
                     if line.startswith("#") or not found_dependencies:
                         continue
 
+                    if "=" not in line:
+                        continue
+
                     raw_dep_name: str = line.split(".")[0].split("=")[0]
-                    if ".workspace=true" in line:
+                    if "workspace=true" in line:
                         self.add_global(raw_dep_name)
                     else:
                         self.add_specific(raw_dep_name)
@@ -126,7 +130,9 @@ def rule1(package_dependencies: List[Dependencies]) -> None:
             )
         )
     else:
-        print(f"{GREEN}(Rule 1){RESET} Every global dependency is used at least {GLOBAL_DEP_THRESHOLD} time{'s'if GLOBAL_DEP_THRESHOLD > 1 else ''}")
+        print(
+            f"{GREEN}(Rule 1){RESET} Every global dependency is used at least {GLOBAL_DEP_THRESHOLD} time{'s'if GLOBAL_DEP_THRESHOLD > 1 else ''}"
+        )
 
 
 def rule2(package_dependencies: List[Dependencies]) -> None:
@@ -137,15 +143,24 @@ def rule2(package_dependencies: List[Dependencies]) -> None:
 
     try:
         global_deps = [
-            package_dep for package_dep in package_dependencies if package_dep.path == "."][0]
-    except Exception as e:
+            package_dep
+            for package_dep in package_dependencies
+            if package_dep.path == "."
+        ][0]
+    except Exception:
         print(f"{RED}(Rule 2){RESET} No global package found")
         return
 
     for dependency in global_deps.get_specifics():
         # package.path check before to dodge list comparison on root
-        for package in [package for package in package_dependencies if package.path != "." and dependency in package.get_specifics()]:
-            print(f"{YELLOW}(Rule 2){RESET} Global dependency {dependency} is imported as specific in {package}")
+        for package in [
+            package
+            for package in package_dependencies
+            if package.path != "." and dependency in package.get_specifics()
+        ]:
+            print(
+                f"{YELLOW}(Rule 2){RESET} Global dependency {dependency} is imported as specific in {package}"
+            )
             # I wonder if reads are faster than writes (is it worth to check if !good before writing ?)
             good = False
     if good:
@@ -161,7 +176,9 @@ def rule3(package_dependencies: List[Dependencies]) -> None:
             if dependency in seen_dependencies:
                 seen_packages = seen_dependencies[dependency]
                 seen_packages.append(package.name())
-                print(f"{YELLOW}(Rule 3){RESET} Packages {seen_packages[0]} and {package.name()} both use {dependency}")
+                print(
+                    f"{YELLOW}(Rule 3){RESET} Packages {seen_packages[0]} and {package.name()} both use {dependency}"
+                )
                 good = False
             else:
                 seen_dependencies[dependency] = [package.name()]
@@ -198,7 +215,7 @@ def rule4(package_dependencies: List[Dependencies]) -> None:
 
     for package, results in processes.items():
         tag: bool = True
-        # iter over results, build a list of dep which processes returned nothing (bat found no trace of the dep name in the code)
+        # iter over results, build a list of dep which processes returned nothing (rg found no trace of the dep name in the code)
         for dep in {dep for dep, process in results if process.communicate()[0] == b""}:
             if tag:
                 print()
