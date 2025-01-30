@@ -1,5 +1,3 @@
-use rocket::data::ByteUnit;
-
 lazy_static! {
     static ref FILENAME_VALIDATION_REGEX: regex::Regex =
         regex::Regex::new(r"^[A-Za-z0-9_.-]{1,100}$").unwrap();
@@ -13,7 +11,10 @@ pub async fn api_upload(
 ) -> crate::response::Response {
     use {
         crate::response::ResponseBuilder,
-        rocket::http::{ContentType, Status},
+        rocket::{
+            data::ByteUnit,
+            http::{ContentType, Status},
+        },
         std::time::Instant,
         uuid::Uuid,
     };
