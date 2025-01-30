@@ -1,8 +1,19 @@
-use gloo::{console::log, file::BlobContents};
+use gloo::console::log;
 
 static CURRENT_LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-// const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
-pub const SIZE_LIMIT_BYTES: usize = 1024 /*kb*/ * 1024 /*mb*/ * 50;
+
+const fn parse_u64(s: &str) -> u64 {
+    let mut out: u64 = 0;
+    let mut i: usize = 0;
+    while i < s.len() {
+        out *= 10;
+        out += (s.as_bytes()[i] - b'0') as u64;
+        i += 1;
+    }
+    out
+}
+
+pub const SIZE_LIMIT_BYTES: u64 = parse_u64(env!("MAX_UPLOAD_SIZE"));
 
 fn new_local_id() -> u32 {
     use std::sync::atomic::Ordering;
@@ -21,7 +32,7 @@ enum FileState {
 
 struct UserFile {
     local_id: u32,
-    name: String, 
+    name: String,
     inner: gloo::file::File,
     state: FileState,
 }
@@ -60,7 +71,6 @@ impl yew::Component for Upload {
 
     fn create(_ctx: &yew::Context<Self>) -> Self {
         Self {
-            // readers: std::collections::HashMap::default(),
             files: Vec::default(),
         }
     }
@@ -92,7 +102,6 @@ impl yew::Component for Upload {
             Message::Load(file) => {
                 let local_id = new_local_id();
 
-
                 self.files.push(UserFile {
                     local_id,
                     // This isn't a security, as client side security are dumb imo,
@@ -109,7 +118,6 @@ impl yew::Component for Upload {
                 true
             }
             Message::Loaded { local_id } => {
-
                 let Some(file) = self.files.iter_mut().find(|f| f.local_id == local_id) else {
                     log!(format!("[Error] Could not get file ({local_id}) from list"));
                     component::push_notification(crate::component::Notification::error(
@@ -122,25 +130,22 @@ impl yew::Component for Upload {
                     return true;
                 };
 
-                // let data_size = data.len();
-                let data_size = file.inner.size();
 
-                // if data_size > SIZE_LIMIT_BYTES {
-                //     component::push_notification(component::Notification::error(
-                //         "File too large",
-                //         vec![
-                //             &format!("File: {}", file.name),
-                //             &format!("File size: {:.0} MB", data_size as f64 / (1024. * 1024.)),
-                //             &format!(
-                //                 "Max size: {:.0} MB",
-                //                 SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)
-                //             ),
-                //         ],
-                //         5.,
-                //     ));
-                //     self.files.retain(|f| f.local_id != local_id);
-                //     return true;
-                // }
+                if file.inner.size() > SIZE_LIMIT_BYTES {
+                    component::push_notification(component::Notification::error(
+                        "File too large",
+                        vec![
+                            &format!("File: {}", file.name),
+                            &format!("File size: {}", mem::format(file.inner.size(), &mem::Prefix::Binary)),
+                            &format!(
+                                "Max size: {}", mem::format(SIZE_LIMIT_BYTES, &mem::Prefix::Binary)
+                            ),
+                        ],
+                        5.,
+                    ));
+                    self.files.retain(|f| f.local_id != local_id);
+                    return true;
+                }
 
                 file.state = FileState::Local;
 
@@ -149,7 +154,7 @@ impl yew::Component for Upload {
                         "Loaded file",
                         vec![
                             &format!("File name: {:?}", file.name()),
-                            &format!("File size: {:.1}mb", data_size as f64 / (1024. * 1024.)),
+                            &format!("File size: {}", mem::format(file.inner.size(), &mem::Prefix::Binary)),
                         ],
                         5.,
                     ));
@@ -169,7 +174,7 @@ impl yew::Component for Upload {
                         continue;
                     }
 
-                    let gloofile = file.inner.clone(); 
+                    let gloofile = file.inner.clone();
                     let name = file.name();
                     let ext = file.extension().unwrap_or_default();
 
@@ -420,7 +425,7 @@ impl yew::Component for Upload {
                 />
                 <img  src="/resources/upload.png" />
                 <p>{ "Drop your file(s) here or click to select" }</p>
-                <p class="upload_dragdrop_info">{ format!("{:.0}mb maximum", SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)) }</p>
+                <p class="upload_dragdrop_info">{ format!("{} maximum", mem::format(SIZE_LIMIT_BYTES, &mem::Prefix::Binary)) }</p>
             </label>
             <div>{
                 // .rev() Does fix the video issue see #13
@@ -561,11 +566,7 @@ impl UserFile {
     fn name(&self) -> String {
         let name = &self.name;
 
-        // if !name.contains(".") {
-        //     return None;
-        // }
-
-        let dot_index = name.rfind(".").unwrap_or(self.name.len());
+        let dot_index = name.rfind(".").unwrap_or(name.len());
 
         String::from(&name[0..dot_index])
     }
