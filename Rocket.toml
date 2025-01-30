@@ -19,8 +19,8 @@ cli_colors = false
 [default.limits]
 bytes = "1 B"
 data-form = "1 B"
-# file = "0.5 GiB" # 50 MiB
-file = "1 GiB"  # 50 MiB
+# file = "0.5 GiB"
+file = "1 GiB"
 form = "1 B"
 msgpack = "1 B"
 string = "1 B"
