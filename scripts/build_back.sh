@@ -9,3 +9,5 @@ then
 else
   cargo build -p back
 fi
+
+echo Done

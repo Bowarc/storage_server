@@ -301,12 +301,10 @@ async fn store_data_sync(
         rocket::tokio::io::AsyncReadExt as _, std::io::Write as _,
     };
 
-    debug!("Creating the encoder");
     let mut encoder = zstd::stream::Encoder::new(data_file, COMPRESSION_LEVEL).unwrap();
 
-    debug!("Streaming . . .");
-
-    // I am not too happy with that allocation, but since we're in an async context, we don't have much choice
+    // I am not too happy with that allocation, but since we're in an async context
+    // (and i don't really know how async task works, so idk if thread local is usable here), we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
     // since tokio's threads don't have a big stack size
     // const BUFFER_SIZE: usize = 100_000; // 100kb
@@ -322,7 +320,6 @@ async fn store_data_sync(
         let read = original_data.read(&mut buffer).await.unwrap();
 
         if read == 0 {
-            info!("EOF");
             break;
         }
         total_read += read;
@@ -347,10 +344,10 @@ async fn store_data_sync(
     let file_size = metadata.len();
 
     debug!(
-        "totals:\nRead: {}\nWrote: {}\nRatio: {:.3}",
+        "totals:\nRead: {}\nWrote: {}\nRemoved: {:.3}%",
         total_read,
         file_size,
-        file_size as f64 / total_read as f64
+        100.- (file_size as f64 / total_read as f64) * 100.
     );
 
     entry.set_data_size(file_size);

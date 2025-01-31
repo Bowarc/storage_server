@@ -34,3 +34,5 @@ if ! [ -d "./static/" ]; then
 fi
 
 cp $out_dir/* ./static/
+
+echo Done
