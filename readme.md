@@ -1,16 +1,19 @@
-# Simple server that stores data
+# Simple storage server with a wasm front end
 
-My goal was to make something like [transfer.sh](https://transfer.sh/) (which is probably down atm) or [wetransfer](https://wetransfer.com/)
+## Goal
 
+The goal of this project is to make a db-like local storage system for files.  
 
-// Compressed Delivery Network :D
+It does not implement any security as it's not designed to be facing the user directly
 
+// Compressed data node :D
 
 ## Status
 
 - Backend
     It works well.
-    I think cleanup is needed in the cache management code.  
+    Streaming compression and decompression makes it really fast and efficient
+      
     Routes are ugly but eh, it works
     I think logs are bad, and it needs better failure management
 
