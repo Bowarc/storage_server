@@ -36,7 +36,7 @@ My goal was to make something like [transfer.sh](https://transfer.sh/) (which is
 Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
 
 About file size, we really should set a limit, even like a rly high one, but a limit is needed.  
-(See the `file` default.limit in [Rocket.toml](./Rocket.toml)
+(See the `file` default.limit in [Rocket.toml](./Rocket.toml))
 
 ## How to use
 First, download the projects with
