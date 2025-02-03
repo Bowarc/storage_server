@@ -25,13 +25,12 @@ It does not implement any security as it's not designed to be facing the user di
 - [x] The actual server
     - [x] Web server that we can upload files to
     - [x] Web server that we can download files from
-    - [x] JSON API
-- [x] Compression
+    - [x] Streaming upload, download and compression
+    - [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
+    - [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
 - [x] WASM front end
-    - [x] Simple load and upload
-    - [x] Simple download
-- [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
-- [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
+    - [x] Homepage
+    - [x] Upload 
 
 ## Notes
 Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
