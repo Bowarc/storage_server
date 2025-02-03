@@ -13,9 +13,8 @@ It does not implement any security as it's not designed to be facing the user di
 - Backend
     It works well.
     Streaming compression and decompression makes it really fast and efficient
-      
-    Routes are ugly but eh, it works
-    I think logs are bad, and it needs better failure management
+
+    Could really use a dashboard system
 
 - Front-end
     It's really basic
