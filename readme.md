@@ -17,10 +17,9 @@ It does not implement any security as it's not designed to be facing the user di
     Could really use a dashboard system
 
 - Front-end
-    It's really basic
-    Some of the CSS is still done inline
-    A good design is still needed
-    But it works
+    Uses streaming for upload so it's fast  
+    A good design is still needed  
+    But it works  
 
 ## Roadmap
 - [x] The actual server
