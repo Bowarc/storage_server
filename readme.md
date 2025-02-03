@@ -46,9 +46,10 @@ cd ./storage_server
 ```
 
 ### Build
-In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top, replace debug with release to build a more optimized version of the program (build time will be slower)
+In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top,  
+replace debug with release to build a more optimized version of the program (build time will be slower)
 
-Start by running `sh scripts/init.sh`
+Start by running `sh scripts/init.sh`  
 This will create some important folders in the project directory, which the server relies on.
 
 #### Build everything
