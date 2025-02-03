@@ -10,7 +10,7 @@ My goal was to make something like [transfer.sh](https://transfer.sh/) (which is
 
 - Backend
     It works well.
-    I think cleanup is needed in the cache management code.
+    I think cleanup is needed in the cache management code.  
     Routes are ugly but eh, it works
     I think logs are bad, and it needs better failure management
 
@@ -35,20 +35,21 @@ My goal was to make something like [transfer.sh](https://transfer.sh/) (which is
 ## Notes
 Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
 
-About file size, we really should set a limit, even like a rly high one, but a limit is needed. // Fixed at 50MB
-
-Store different infos in the JSON ? // Data size & original file name are currently stored
-Maybe use RON instead of JSON // No point for now, may be faster ? idk
-
+About file size, we really should set a limit, even like a rly high one, but a limit is needed.  
+(See the `file` default.limit in [Rocket.toml](./Rocket.toml)
 
 ## How to use
-First, move in the project directory `cd ./storage_server`
+First, download the projects with
+```console
+git clone https://github.com/bowarc/storage_server
+cd ./storage_server
+```
 
 ### Build
 In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top, replace debug with release to build a more optimized version of the program (build time will be slower)
 
 Start by running `sh scripts/init.sh`
-This will create some important folders in the project directory, which the sevrer relies on.
+This will create some important folders in the project directory, which the server relies on.
 
 #### Build everything
 `sh scripts/build.sh`
