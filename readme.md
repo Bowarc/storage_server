@@ -29,8 +29,8 @@ My goal was to make something like [transfer.sh](https://transfer.sh/) (which is
 - [x] WASM front end
     - [x] Simple load and upload
     - [x] Simple download
-- [ ] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
-- [ ] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
+- [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
+- [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
 
 ## Notes
 Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
