@@ -62,7 +62,7 @@ This will create some important folders in the project directory, which the serv
 `sh scripts/build_front.sh`
 
 ### Run
-To run the server, use `sh scripts/build_front.sh`  
+To run the server, use `sh scripts/run.sh`  
 ⚠️ Make sure the front it built, else the server wont be able to serve any web user
 
 ### CURL
