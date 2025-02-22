@@ -1,54 +1,56 @@
-# Simple server that stores data
+# Simple storage server with a wasm front end
 
-My goal was to make something like [transfer.sh](https://transfer.sh/) (which is probably down atm) or [wetransfer](https://wetransfer.com/)
+## Goal
 
+The goal of this project is to make a db-like local storage system for files.  
 
-// Compressed Delivery Network :D
+It does not implement any security as it's not designed to be facing the user directly
 
+// Compressed data node :D
 
 ## Status
 
 - Backend
-    It works well.
-    I think cleanup is needed in the cache management code.
-    Routes are ugly but eh, it works
-    I think logs are bad, and it needs better failure management
+    It works well.  
+    Streaming compression and decompression makes it really fast and efficient
+
+    Could really use a dashboard system
 
 - Front-end
-    It's really basic
-    Some of the CSS is still done inline
-    A good design is still needed
-    But it works
+    Uses streaming for upload so it's fast  
+    A good design is still needed  
+    But it works  
 
 ## Roadmap
 - [x] The actual server
     - [x] Web server that we can upload files to
     - [x] Web server that we can download files from
-    - [x] JSON API
-- [x] Compression
+    - [x] Streaming upload, download and compression
+    - [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
+    - [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
 - [x] WASM front end
-    - [x] Simple load and upload
-    - [x] Simple download
-- [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
-- [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
+    - [x] Homepage
+    - [x] Upload 
 
 ## Notes
 Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
 
-About file size, we really should set a limit, even like a rly high one, but a limit is needed. // Fixed at 50MB
-
-Store different infos in the JSON ? // Data size & original file name are currently stored
-Maybe use RON instead of JSON // No point for now, may be faster ? idk
-
+About file size, we really should set a limit, even like a rly high one, but a limit is needed.  
+(See the `file` default.limit in [Rocket.toml](./Rocket.toml))
 
 ## How to use
-First, move in the project directory `cd ./storage_server`
+First, download the projects with
+```console
+git clone https://github.com/bowarc/storage_server
+cd ./storage_server
+```
 
 ### Build
-In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top, replace debug with release to build a more optimized version of the program (build time will be slower)
+In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top,  
+replace `debug` with `release` to build a more optimized version of the program (build time will be slower)
 
-Start by running `sh scripts/init.sh`
-This will create some important folders in the project directory, which the sevrer relies on.
+Start by running `sh scripts/init.sh`  
+This will create some important folders in the project directory, which the server relies on.
 
 #### Build everything
 `sh scripts/build.sh`
@@ -60,7 +62,7 @@ This will create some important folders in the project directory, which the sevr
 `sh scripts/build_front.sh`
 
 ### Run
-To run the server, use `sh scripts/build_front.sh`  
+To run the server, use `sh scripts/run.sh`  
 ⚠️ Make sure the front it built, else the server wont be able to serve any web user
 
 ### CURL
