@@ -1,5 +1,6 @@
 :root{
-    --side-margin: 15%;
+    --side-margin: 10vw;
+    font-size: 1.5vw;
 
 }
 *.home{
@@ -7,6 +8,7 @@
 }
 
 .home Button{
+    font-size: 1.5vw;
     background-color: var(--text-400);
     color: white;
 
@@ -22,7 +24,7 @@
 }
 
 .home_section_title{
-    font-size: 43px;
+    font-size: 3.5vw;
     font-family: 'Tangerine', sans-serif;
     color: var(--secondary-400);
 
@@ -32,6 +34,7 @@
 }
 
 .home_section_text{
+    /* font-size: 1.5vw; */
     text-align: left;
     font-family: 'Paprika', serif;
     display:inline-block;
@@ -62,7 +65,7 @@
     color: var(--text-800); /* Light text for better contrast */
     padding: 2px 4px;
     border-radius: 4px;
-    font-size: 0.95em;
+    font-size: 1.5vw;
 }
 /*
 .code-section .highlight {
