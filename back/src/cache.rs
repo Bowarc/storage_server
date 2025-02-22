@@ -251,7 +251,7 @@ fn read_cache(
 
 // This tries to create the .meta and .data files
 // If it fails to create one of the two, it deletes the one created
-pub fn sync_cache_files(
+pub fn create_cache_files(
     meta_path: String,
     data_path: String,
 ) -> Result<(std::fs::File, std::fs::File), crate::error::CacheError> {
@@ -388,12 +388,7 @@ async fn store(
     let uuid = entry.uuid();
     let id = uuid.hyphenated().to_string();
 
-    // let (mut meta_file, mut data_file) = create_files(
-    //     format!("{CACHE_DIRECTORY}/{id}.meta"),
-    //     format!("{CACHE_DIRECTORY}/{id}.data"),
-    // )
-    // .await?;
-    let (mut meta_file, mut data_file) = sync_cache_files(
+    let (mut meta_file, mut data_file) = create_cache_files(
         format!("{CACHE_DIRECTORY}/{id}.meta"),
         format!("{CACHE_DIRECTORY}/{id}.data"),
     )?;
