@@ -67,7 +67,7 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
 #[rocket::main]
 async fn main() {
     let filters = [("rocket", log::LevelFilter::Warn)];
-    logger::init([
+    let _log_handle = logger::init([
         logger::Config::default()
             .output(logger::Output::Stdout)
             .colored(true)

@@ -28,6 +28,7 @@ impl Component for App {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
+        
         Self {
             current_scene: Scene::Home,
         }

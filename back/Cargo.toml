@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 rocket = { version = "0.5.0", features = ["json"] }
 uuid.workspace = true
-logger = { git = "https://github.com/Bowarc/Crates.git", package = "logger" }
+logger = { git = "https://github.com/Bowarc/Crates.git", package = "logger", features = ["multithread", "panics"] }
 time.workspace = true
 log = "0.4.20"
 regex = "1.10.2"

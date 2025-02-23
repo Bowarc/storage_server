@@ -130,15 +130,18 @@ impl yew::Component for Upload {
                     return true;
                 };
 
-
                 if file.inner.size() > SIZE_LIMIT_BYTES {
                     component::push_notification(component::Notification::error(
                         "File too large",
                         vec![
                             &format!("File: {}", file.name),
-                            &format!("File size: {}", mem::format(file.inner.size(), &mem::Prefix::Binary)),
                             &format!(
-                                "Max size: {}", mem::format(SIZE_LIMIT_BYTES, &mem::Prefix::Binary)
+                                "File size: {}",
+                                mem::format(file.inner.size(), &mem::Prefix::Binary)
+                            ),
+                            &format!(
+                                "Max size: {}",
+                                mem::format(SIZE_LIMIT_BYTES, &mem::Prefix::Binary)
                             ),
                         ],
                         5.,
@@ -154,7 +157,10 @@ impl yew::Component for Upload {
                         "Loaded file",
                         vec![
                             &format!("File name: {:?}", file.name()),
-                            &format!("File size: {}", mem::format(file.inner.size(), &mem::Prefix::Binary)),
+                            &format!(
+                                "File size: {}",
+                                mem::format(file.inner.size(), &mem::Prefix::Binary)
+                            ),
                         ],
                         5.,
                     ));
@@ -396,6 +402,7 @@ impl yew::Component for Upload {
     fn view(&self, ctx: &yew::Context<Self>) -> yew::Html {
         use yew::TargetCast as _;
 
+
         yew::html! {<div class="upload_view">
             <button class="upload_button" onclick={ctx.link().callback(|_| Message::Upload)}>
                 { "Upload !" }
@@ -437,22 +444,30 @@ impl yew::Component for Upload {
                         <div class="upload_file_preview_info">
                             <p class="upload_file_preview_name">{ &file.name }</p>
                             {
+
                                 match &file.state{
                                     FileState::Loading => yew::html!{ <p class="preview-state">{ "Loading . . ." }</p>},
                                     FileState::Local => yew::html!{ <p class="preview-state">{ "Not yet uploaded" }</p>},
                                     FileState::Uploading => yew::html!{ <p class="preview-state">{ "Uploading . . ." }</p>},
                                     FileState::Uploaded(uuid) => {
                                         let uuid = *uuid;
-                                        yew::html!{<>
-                                            <p class="preview-state">
-                                                { format!("Uploaded with id: {uuid}") }
-                                                <button onclick={
-                                                    ctx.link().callback(move |_|Message::CopyToClipboard(format!("http://192.168.1.39:42069/{uuid}")))}>{
-                                                    "Copy"
-                                                }</button>
-                                            </p>
-                                        </>
-                                    }
+                                        if let Some(url) = web_sys::window().and_then(|window| window.location().host().ok()){
+                                            yew::html!{<>
+                                                <p class="preview-state">
+                                                    { format!("Uploaded with id: {uuid}") }
+                                                    <button onclick={
+                                                        ctx.link().callback(move |_|Message::CopyToClipboard(format!("{url}/{uuid}")))}>{
+                                                        "Copy"
+                                                    }</button>
+                                                </p>
+                                            </>}
+                                        }else{
+                                            yew::html!{<>
+                                                <p class="preview-state">
+                                                    { format!("Uploaded with id: {uuid}") }
+                                                </p>
+                                            </>}
+                                        }
                                 },
                                     FileState::UploadError(_error) => yew::html!{ <p class="preview-state">{ format!("Upload error") }</p>},
                                 }
