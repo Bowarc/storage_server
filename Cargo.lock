@@ -1192,13 +1192,14 @@ dependencies = [
 [[package]]
 name = "logger"
 version = "0.1.0"
-source = "git+https://github.com/Bowarc/Crates.git#0b53432815263a8d9e36f660ec732ac9950a6c67"
+source = "git+https://github.com/Bowarc/Crates.git#e9f312ddfcdb4b1c26087773f28f5c3ea147ad74"
 dependencies = [
  "chrono",
  "colored",
  "hashbrown",
  "log",
  "log-panics",
+ "parking_lot",
  "thiserror 2.0.11",
 ]
 
@@ -1229,7 +1230,7 @@ dependencies = [
 [[package]]
 name = "mem"
 version = "0.1.0"
-source = "git+https://github.com/Bowarc/Crates.git#0b53432815263a8d9e36f660ec732ac9950a6c67"
+source = "git+https://github.com/Bowarc/Crates.git#e9f312ddfcdb4b1c26087773f28f5c3ea147ad74"
 
 [[package]]
 name = "memchr"
@@ -2011,7 +2012,7 @@ dependencies = [
 [[package]]
 name = "time"
 version = "0.1.0"
-source = "git+https://github.com/Bowarc/Crates.git#0b53432815263a8d9e36f660ec732ac9950a6c67"
+source = "git+https://github.com/Bowarc/Crates.git#e9f312ddfcdb4b1c26087773f28f5c3ea147ad74"
 dependencies = [
  "derivative",
 ]

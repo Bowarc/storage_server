@@ -3,7 +3,7 @@
 ## defaults for ALL profiles
 [default]
 # IP address to serve on.
-address = "192.168.1.39" # Local addr
+address = "127.0.0.1" # Local addr
 # Port to serve on.
 port = 0xa455
 # Number of threads to use for executing futures.
@@ -17,14 +17,13 @@ cli_colors = false
 
 # Streaming read size limits.
 [default.limits]
-bytes = "1 B"
-data-form = "1 B"
-# file = "0.5 GiB"
+bytes = "0 B"
+data-form = "0 B"
 file = "1 GiB"
-form = "1 B"
-msgpack = "1 B"
-string = "1 B"
-json = "1 B"    # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
+form = "0 B"
+msgpack = "0 B"
+string = "0 B"
+json = "0 B"      # 50 kb data + 33% base64 + 3.5mb space for additional json data and others
 
 
 # ## set only when compiled in debug mode, i.e, `cargo build`

@@ -22,8 +22,8 @@ impl yew::Component for Contact {
                         // <a href="https://github.com/HugoLz" target="_blank">{"HugoLz"}</a>
                     // </li>
                     <li>{"Email: "}
-                        <a href="mailto:***REMOVED***">{"***REMOVED***"}</a>{" & "}
-                        <a href="mailto:***REMOVED***">{"***REMOVED***"}</a>
+                        <a href="mailto:bowarc@proton.me">{"Bowarc@proton.me"}</a>{" & "}
+                        <a href="mailto:hugo.lezoualch@proton.me">{"hugo.lezoualch@proton.me"}</a>
                     </li>
                 </ul>
             </div>
