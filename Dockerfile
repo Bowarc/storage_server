@@ -1,57 +1,66 @@
-###########
-## BUILD ##
-###########
-FROM rust:1.85 AS builder
+##########
+#  BASE  #
+##########
+FROM rust:1.85 AS base
 
-# Install build dependencies
 RUN rustup target add wasm32-unknown-unknown
 RUN cargo install --locked wasm-bindgen-cli
+# RUN cargo install sccache
+RUN cargo install cargo-chef
 
-# Setup
+##########
+# PANNER #
+##########
+FROM base AS planner
+
 WORKDIR /app
 
-# Get build scripts
-RUN mkdir ./scripts
-COPY ./scripts/build.sh ./scripts/build_back.sh ./scripts/build_front.sh ./scripts
+# Move the essentials
+COPY ./Rocket.toml ./Cargo.toml ./Cargo.lock .
+COPY ./back ./back
+COPY ./front ./front
 
-# Copy project
-COPY Cargo.toml Cargo.lock Rocket.toml .
+# Prepare all dependencies
+RUN cargo chef prepare --recipe-path recipe.json
 
-RUN mkdir ./back ./back/src && echo "fn main() {}" > ./back/src/main.rs
-COPY ./back/Cargo.toml ./back
+###########
+# BUILDER #
+###########
+FROM base AS builder
 
-RUN mkdir ./front ./front/src && echo "fn main() {}" > ./front/src/main.rs
-COPY ./front/Cargo.toml ./front
-COPY ./front/build.rs ./front
+WORKDIR /app
 
-# Compile dependencies
-RUN cargo b -p back --release
-RUN cargo b -p front --target wasm32-unknown-unknown
+# Take the recipe only from tyhe planner
+COPY --from=planner /app/recipe.json recipe.json
 
-# Copy the project's code (this is to make sure a layer with compiled dependencies is created)
-RUN rm -rf ./back/src ./front/src
-COPY ./back/src ./back/src
-COPY ./front/src ./front/src
+# Set up the project's build artefacts
+RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook -p front --release --target=wasm32-unknown-unknown --recipe-path recipe.json
 
-# Build the whole project
+# Pull the projects code
+COPY ./scripts/build.sh ./scripts/build_back.sh ./scripts/build_front.sh ./scripts/
+COPY ./Rocket.toml ./Cargo.toml ./Cargo.lock .
+COPY ./back ./back
+COPY ./front ./front
+
+# Build it
 RUN sh ./scripts/build.sh release
 
-#########
-## RUN ##
-#########
+##########
+# RUNNER #
+##########
 FROM ubuntu:22.04 AS runner
-# FROM scratch Causes issues with musl libc ? something like that
-# check this for more info https://dev.to/mattdark/rust-docker-image-optimization-with-multi-stage-builds-4b6c
- 
+
 WORKDIR /app
 
-COPY --from=builder /app/target/release/storage_server .
-COPY --from=builder /app/Rocket.toml .
+# Here we take the rocket config from builder because it has been used to build the front end, to elimiate all TOCTOU / desync issues, we use the same one
+COPY --from=builder /app/target/release/storage_server /app/Rocket.toml .
 COPY ./static ./static
 COPY --from=builder /app/target/wasm-bindgen/release/* ./static/
 
-RUN mkdir log cache
+RUN mkdir ./log
+RUN mkdir ./cache
 
-EXPOSE 42069
+EXPOSE 42070
 
 CMD ["./storage_server"]

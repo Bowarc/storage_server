@@ -2,14 +2,13 @@
 
 ## defaults for ALL profiles
 [default]
-# IP address to serve on.
-address = "127.0.0.1" # Local addr
-# Port to serve on.
-port = 0xa455
+ident = false         # Do not show ident for security reasons (kinda dumb since it's open source lol)
+address = "127.0.0.1"
+port = 0xa456
 # Number of threads to use for executing futures.
 workers = 8
 # Keep-alive timeout seconds; disabled when 0.
-keep_alive = 0 # This could become a problem if we have to read/write large files
+keep_alive = 0
 # Max level to log. (off/normal/debug/critical)
 log_level = "normal" # Isn't it the 'minimal' level instead ? like log everything above that threshold ?
 # Doesn't work well with my file logger system
