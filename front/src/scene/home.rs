@@ -31,7 +31,7 @@ impl yew::Component for Home {
                         "Welcome"
                     }</h2>
                     <p class="home_section_text">
-                        { format!("This file sharing platform doesn't require any login, you can upload files up to {:.0} mb.", crate::scene::upload::SIZE_LIMIT_BYTES as f64 / (1024. * 1024.)) }
+                        { format!("This file sharing platform doesn't require any login, you can upload files up to {:.0}.", mem::format(crate::scene::upload::SIZE_LIMIT_BYTES, &mem::Prefix::Decimal)) }
                         <br/>
                         { "Once uploaded, your will receive a shareable download link for you to send to anyone you want."}
                     </p>

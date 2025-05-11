@@ -1,24 +1,24 @@
 # Simple storage server with a wasm front end
 
+// Compressed data node :D
+
 ## Goal
 
 The goal of this project is to make a db-like local storage system for files.  
 
-It does not implement any security as it's not designed to be facing the user directly
-
-// Compressed data node :D
+<u>**It's therefore not meant to be user-facing.**</u>  
 
 ## Status
 
-- Backend
+- Backend  
     It works well.  
-    Streaming compression and decompression makes it really fast and efficient
+    Streaming compression and decompression makes it really fast and memory-efficient
 
     Could really use a dashboard system
 
-- Front-end
+- Front-end  
     Uses streaming for upload so it's fast  
-    A good design is still needed  
+    A good front-end design is still needed but not required ()
     But it works  
 
 ## Roadmap
@@ -33,22 +33,45 @@ It does not implement any security as it's not designed to be facing the user di
     - [x] Upload 
 
 ## Notes
-Idk if any security is needed (ouside something against DDoS or spam but i wont do that here)
 
-About file size, we really should set a limit, even like a rly high one, but a limit is needed.  
-(See the `file` default.limit in [Rocket.toml](./Rocket.toml))
+About input file size, I've set 1Gib, but it's easy to modify  
+(See `default.limit.file` in [Rocket.toml](./Rocket.toml))
 
 ## How to use
-First, download the projects with
+
+### Docker install
+
+#### Download the git repo
+
+```console
+git clone https://github.com/bowarc/storage_server
+cd ./storage_server
+```
+#### Build it
+
+```console
+docker build -t storage_server:latest .
+```
+
+#### Deploy it
+Use host network and link a docker volume named 'storage_server' that points to the server's storage cache 
+```console
+docker run -d --network host -v storage_server:/app/cache storage_server:latest 
+```
+
+### Manual install
+
+#### First, download the projects with
+
 ```console
 git clone https://github.com/bowarc/storage_server
 cd ./storage_server
 ```
 
-### Build
-In each build script (`./scripts`, you'll find `mode=debug # debug, release` at the top,  
-replace `debug` with `release` to build a more optimized version of the program (build time will be slower)
+In each build script `./scripts/build*`, you can specify the command line argument `r` or `release` to build the project in release mode  
+This will enable some optimisations but make the compilation a bit slower.
 
+#### Init
 Start by running `sh scripts/init.sh`  
 This will create some important folders in the project directory, which the server relies on.
 
@@ -82,4 +105,3 @@ curl http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext -O
 
 > **_NOTE:_** On browser you only need the UUID as it auto redirects to the right file name (```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>``` -> ```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext```).  
     Take a look at [#7](https://github.com/Bowarc/storage_server/issues/7) for more informations.
-

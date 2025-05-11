@@ -2,5 +2,3 @@
 
 mkdir cache
 mkdir log
-
-touch log/server.log
