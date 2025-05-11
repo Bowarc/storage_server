@@ -1,6 +1,0 @@
-This is the file content
-a
-
-
-
-b

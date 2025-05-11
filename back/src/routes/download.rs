@@ -193,24 +193,25 @@ pub async fn api_download_filename(
     resp
 }
 
-#[rocket::head("/<id>")]
-pub async fn api_download_head(
-    id: &str,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
-) -> String {
-    use {std::str::FromStr, uuid::Uuid};
+// Not sure why it's there, it seems to return only the file name
+// #[rocket::head("/<id>")]
+// pub async fn api_download_head(
+//     id: &str,
+//     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+// ) -> String {
+//     use {std::str::FromStr, uuid::Uuid};
 
-    info!("Request of HEAD {id}");
-    let uuid = Uuid::from_str(id).unwrap();
+//     info!("Request of HEAD {id}");
+//     let uuid = Uuid::from_str(id).unwrap();
 
-    let upload_info = cache.read().await.get_entry(uuid).await.unwrap();
+//     let upload_info = cache.read().await.get_entry(uuid).await.unwrap();
 
-    format!(
-        "{}.{}",
-        upload_info.upload_info().name(),
-        upload_info.upload_info().extension()
-    )
-}
+//     format!(
+//         "{}.{}",
+//         upload_info.upload_info().name(),
+//         upload_info.upload_info().extension()
+//     )
+// }
 
 #[cfg(test)]
 mod tests {
@@ -268,12 +269,6 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_download_filename() {
-        logger::init(
-            logger::Config::default()
-                .output(logger::Output::Stdout)
-                .filter("rocket", log::LevelFilter::Warn),
-        );
-
         let base_filename = "test.file";
 
         let uuid = {

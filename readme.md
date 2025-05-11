@@ -28,6 +28,8 @@ The goal of this project is to make a db-like local storage system for files.
     - [x] Streaming upload, download and compression
     - [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
     - [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
+    - [ ] A way to not store duplicates, maybe hash-based and keep a reference counter in the `.meta` files [#10](https://github.com/Bowarc/storage_server/issues/10) and [#3](https://github.com/Bowarc/storage_server/issues/3)
+    - [ ] A way to delete a stored file (see [#3](https://github.com/Bowarc/storage_server/issues/3))
 - [x] WASM front end
     - [x] Homepage
     - [x] Upload 
@@ -37,7 +39,7 @@ The goal of this project is to make a db-like local storage system for files.
 About input file size, I've set 1Gib, but it's easy to modify  
 (See `default.limit.file` in [Rocket.toml](./Rocket.toml))
 
-## How to use
+## Installation
 
 ### Docker install
 
@@ -88,7 +90,11 @@ This will create some important folders in the project directory, which the serv
 To run the server, use `sh scripts/run.sh`  
 ⚠️ Make sure the front it built, else the server wont be able to serve any web user
 
-### CURL
+## Usage
+
+Check the [examples](./examples) directory for an using python (make sure the server is running and you generated the sample file before running the example)
+
+Any programming language able to make local web request could use it, here is an example using curl
 
 #### Upload
 
@@ -103,5 +109,6 @@ This yields back an uuid that is used by the server to identify that file
 curl http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext -O
 ```
 
-> **_NOTE:_** On browser you only need the UUID as it auto redirects to the right file name (```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>``` -> ```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext```).  
+> **_NOTE:_** On browser you only need the UUID as it auto redirects to the right file name  
+(```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>``` -> ```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext```).  
     Take a look at [#7](https://github.com/Bowarc/storage_server/issues/7) for more informations.
