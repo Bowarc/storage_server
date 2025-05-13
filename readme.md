@@ -92,7 +92,7 @@ To run the server, use `sh scripts/run.sh`
 
 ## Usage
 
-Check the [examples](./examples) directory for an using python (make sure the server is running and you generated the sample file before running the example)
+Check the [examples](./examples) directory for one using python (make sure the server is running and you generated the sample file before running the example)
 
 Any programming language able to make local web request could use it, here is an example using curl
 
