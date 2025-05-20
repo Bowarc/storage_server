@@ -1,17 +1,27 @@
-:root{
+:root {
   --text-background-color: color-mix(in srgb, var(--background-50), transparent 15%);
   --blur-size: 7.5px;
+
+  /* @link https://utopia.fyi/type/calculator?c=320,13,1.125,1920,16,1.2,5,3,&s=0.75|0.5|0.25,1.5|2|3|4|6,s-l&g=s,l,xl,12 */
+  --text--2: clamp(0.642rem, 0.6315rem + 0.0525vw, 0.6944rem);
+  --text--1: clamp(0.7222rem, 0.7rem + 0.1111vw, 0.8333rem);
+  --text-0: clamp(0.8125rem, 0.775rem + 0.1875vw, 1rem);
+  --text-1: clamp(0.9141rem, 0.8569rem + 0.2859vw, 1.2rem);
+  --text-2: clamp(1.0283rem, 0.946rem + 0.4117vw, 1.44rem);
+  --text-3: clamp(1.1569rem, 1.0426rem + 0.5711vw, 1.728rem);
+  --text-4: clamp(1.3015rem, 1.147rem + 0.7721vw, 2.0736rem);
+  --text-5: clamp(1.4642rem, 1.2593rem + 1.0242vw, 2.4883rem);
 }
 
-*{
+* {
   scrollbar-color: #454a4d #202324;
 }
 
-html{
-/*  color: var(--text-900);*/
+html {
+  /*  color: var(--text-900);*/
 }
 
-body{
+body {
   background-color: var(--background-50);
   color: var(--text-500);
   width: 100%;
@@ -25,35 +35,35 @@ body{
   width: 100%;
   height: 6vh;
   margin-bottom: 3%;
-/*  background-color: red;*/
-/*  border: 2px solid red;*/
+  /*  background-color: red;*/
+  /*  border: 2px solid red;*/
 }
 
-#header .icon{
+#header .icon {
   float: right;
 }
 
-#header #scene_list{
+#header #scene_list {
   height: 100%;
   left: 0px;
   display: grid;
   grid-template-columns: repeat(100, auto);
   grid-gap: 0.5%;
   padding-left: 0.2%;
-/*  border: 2px solid green; */
+  /*  border: 2px solid green; */
 }
 
-.current{
+.current {
   border: 2px solid var(--primary-700) !important;
 }
 
-.scene_button{
+.scene_button {
   width: 100%;
-  font-size: 16px;
+  font-size: var(--text-1);
   margin-top: 0.5vh;
   margin-bottom: 0.5vh;
   cursor: pointer;
-/*  padding: 10px 20px;*/
+  /*  padding: 10px 20px;*/
   border: 1px solid var(--primary-400);
   border-radius: 8px;
   background-color: transparent;
@@ -62,7 +72,7 @@ body{
   -webkit-backdrop-filter: blur(var(--blur-size));
 }
 
-.icon{
+.icon {
   width: 25px;
   height: 25px;
   font-size: 10px;
@@ -105,13 +115,12 @@ footer {
   background-color: transparent;
 }
 
-.warning{
+.warning {
   color: black;
   width: 100%;
   height: 50px;
-/*  align: center;*/
+  /*  align: center;*/
   line-height: 50px;
   text-align: center;
   background: yellow;
 }
-

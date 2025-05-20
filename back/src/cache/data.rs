@@ -1,16 +1,14 @@
 // Structure of a .meta file
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Metadata {
-    username: String,
     name: String,
     extension: String,
     size: u64,
 }
 
 impl Metadata {
-    pub fn new(username: String, name: String, extension: String, size: u64) -> Self {
+    pub fn new(name: String, extension: String, size: u64) -> Self {
         Self {
-            username,
             name,
             extension,
             size,
@@ -45,7 +43,6 @@ impl CacheEntry {
         Self {
             uuid,
             upload_info: UploadInfo {
-                username: metadata.username,
                 name: metadata.name,
                 extension: metadata.extension,
             },
@@ -88,7 +85,6 @@ impl CacheEntry {
 
     pub fn build_metadata(&self) -> Metadata {
         Metadata::new(
-            self.upload_info.username().clone(),
             self.upload_info.name().clone(),
             self.upload_info.extension().clone(),
             self.data_size(),
@@ -99,22 +95,16 @@ impl CacheEntry {
 // The data supplied with an upload request
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct UploadInfo {
-    username: String,
     name: String,
     extension: String,
 }
 
 impl UploadInfo {
-    pub fn new(username: String, name: String, extension: String) -> Self {
+    pub fn new(name: String, extension: String) -> Self {
         Self {
-            username,
             name,
             extension,
         }
-    }
-
-    pub fn username(&self) -> &String {
-        &self.username
     }
 
     pub fn name(&self) -> &String {

@@ -16,7 +16,7 @@ pub async fn api_upload(
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
 ) -> crate::response::Response {
     use {
-        crate::response::ResponseBuilder,
+        crate::response::Response,
         rocket::{
             data::ByteUnit,
             http::{ContentType, Status},
@@ -38,7 +38,7 @@ pub async fn api_upload(
     // Validation of user input
     if !FILENAME_VALIDATION_REGEX.is_match(filename) {
         error!("[{uuid}] The given filename doesn't match the validation regex");
-        return ResponseBuilder::default()
+        return Response::builder()
             .with_status(Status::BadRequest)
             .with_content("The specified filename should only contain alphanumeric characters, underscores, dots and shouldn't be longer than 100 characters")
             .with_content_type(ContentType::Text)
@@ -54,7 +54,6 @@ pub async fn api_upload(
     let cache_entry = cache_handle.new_entry(
         uuid,
         crate::cache::data::UploadInfo::new(
-            "NO_USER".to_string(),
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
         ),
@@ -65,7 +64,7 @@ pub async fn api_upload(
 
     if let Err(e) = crate::cache::Cache::store(cache_entry, data_stream).await {
         error!("[{uuid}] An error occured while storing the given data: {e}");
-        return ResponseBuilder::default()
+        return Response::builder()
             .with_status(Status::InternalServerError)
             .with_content("An error occured while caching the data")
             .with_content_type(ContentType::Text)
@@ -77,7 +76,7 @@ pub async fn api_upload(
         time::format(start_timer.elapsed(), 2)
     );
 
-    ResponseBuilder::default()
+    Response::builder()
         .with_status(Status::Created)
         .with_content(uuid.hyphenated().to_string())
         .with_content_type(ContentType::Text)

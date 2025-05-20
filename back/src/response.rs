@@ -1,7 +1,8 @@
 pub enum ResponseContent {
     Sized(Vec<u8>),
-    // ZstdDecoderReader(zstd::stream::read::Decoder<>) ?
     Stream(Box<dyn std::io::Read + Send>),
+    AsyncStream(Box<dyn tokio::io::AsyncRead + Send + Unpin>),
+    AsyncBufStream(Box<dyn tokio::io::AsyncBufRead + Send + Unpin>),
 }
 
 impl From<Vec<u8>> for ResponseContent {
@@ -26,6 +27,25 @@ impl From<Box<dyn std::io::Read + Send>> for ResponseContent {
     }
 }
 
+impl From<Box<dyn tokio::io::AsyncRead + Send + Unpin>> for ResponseContent {
+    fn from(value: Box<dyn tokio::io::AsyncRead + Send + Unpin>) -> Self {
+        Self::AsyncStream(value)
+    }
+}
+
+impl From<Box<dyn tokio::io::AsyncBufRead + Send + Unpin>> for ResponseContent {
+    fn from(value: Box<dyn tokio::io::AsyncBufRead + Send + Unpin>) -> Self {
+        Self::AsyncBufStream(value)
+    }
+}
+
+impl From<tokio::fs::File> for ResponseContent {
+    fn from(value: tokio::fs::File) -> Self {
+        Self::AsyncStream(Box::new(value))
+    }
+}
+
+
 pub struct Response {
     status: rocket::http::Status,
     headers: std::collections::HashMap<String, String>,
@@ -34,6 +54,19 @@ pub struct Response {
 }
 
 impl Response {
+    pub fn builder() -> ResponseBuilder {
+        ResponseBuilder::default()
+    }
+
+    pub fn redirect(to: &str) -> Self {
+        use rocket::http::Status;
+
+        ResponseBuilder::default()
+            .with_header("Location", to)
+            .with_status(Status::SeeOther)
+            .build()
+    }
+
     pub fn status(&self) -> &rocket::http::Status {
         &self.status
     }
@@ -68,6 +101,12 @@ impl<'r> rocket::response::Responder<'r, 'static> for Response {
                 use tokio_util::compat::FuturesAsyncReadCompatExt as _;
                 resp.streamed_body(futures::io::AllowStdIo::new(reader).compat());
             }
+            ResponseContent::AsyncStream(async_read) => {
+                resp.streamed_body(async_read);
+            }
+            ResponseContent::AsyncBufStream(async_buf_read) => {
+                resp.streamed_body(async_buf_read);
+            }
         }
 
         resp.ok()
@@ -79,10 +118,6 @@ pub struct ResponseBuilder {
 }
 
 impl ResponseBuilder {
-    // pub fn from_response(response: Response) -> Self {
-    //     Self { inner: response }
-    // }
-
     pub fn with_content(mut self, value: impl Into<ResponseContent>) -> Self {
         self.inner.content = value.into();
         self

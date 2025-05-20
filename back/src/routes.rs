@@ -1,14 +1,14 @@
-#[path = "routes/dashboard.rs"]
-mod dashboard_route;
+#[path = "routes/info.rs"]
+mod info_route;
 #[path = "routes/download.rs"]
 mod download_route;
 #[path = "routes/upload.rs"] // Naming conflict in main when registering route
 mod upload_route;
 
 #[allow(unused_imports)] // Used by main.rs
-pub use dashboard_route::*;
-#[allow(unused_imports)] // Used by main.rs
 pub use download_route::*;
+#[allow(unused_imports)] // Used by main.rs
+pub use info_route::*;
 use rocket::tokio::io::AsyncReadExt;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;

@@ -45,6 +45,7 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
                 routes::api_upload,
                 routes::api_download,
                 routes::api_download_filename,
+                routes::info
                 // routes::api_download_head,
             ],
         )

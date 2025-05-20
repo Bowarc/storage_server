@@ -19,4 +19,5 @@ futures = { version = "0.3.30", default-features = false, features = ["async-awa
 lazy_static = "1.5.0"
 serde.workspace = true
 zstd = "0.13.2"
+tokio = { version = "1.43.0", features = ["rt-multi-thread"] }
 tokio-util = { version = "0.7.13", default-features = false, features = ["compat"] }

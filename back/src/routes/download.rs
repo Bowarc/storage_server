@@ -1,13 +1,13 @@
 lazy_static! {
     // This regex only match uuid v4
-    static ref UUID_VALIDATION_REGEX: regex::Regex = regex::Regex::new(
+    pub static ref UUID_VALIDATION_REGEX: regex::Regex = regex::Regex::new(
         r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
     )
     .unwrap();
 }
 
 #[inline]
-fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError> {
+pub fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError> {
     use {crate::error::UuidParseError, std::str::FromStr, uuid::Uuid};
 
     if !UUID_VALIDATION_REGEX.is_match(raw_id) {
