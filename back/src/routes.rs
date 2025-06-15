@@ -9,145 +9,122 @@ mod upload_route;
 pub use download_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use info_route::*;
-use rocket::tokio::io::AsyncReadExt;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;
 
+
+// Here are routes that are managed by the front end router, so just serve the page and let it do it's things
+macro_rules! front_route {
+    // here i could match on list of tokens with $($path:..)
+    // But I prefer keeping things simple
+    ($name:ident, $path:literal) => {
+        #[rocket::get($path)]
+        pub async fn $name(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
+            root(ip_addr).await
+        }
+    };
+}
+
+front_route!(home, "/home");
+front_route!(upload, "/upload");
+front_route!(contact, "/contact");
+front_route!(_404, "/404");
+
+
 #[rocket::get("/")]
-pub async fn root(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+pub async fn root(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
     use rocket::http::ContentType;
 
-    static_file_response("index.html", ContentType::HTML, remote_addr).await
+    static_file_response("index.html", ContentType::HTML, ip_addr, false).await
 }
 
 #[rocket::get("/front.js")]
-pub async fn front_js(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+pub async fn front_js(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
     use rocket::http::ContentType;
-    
-    static_file_response("/front.js", ContentType::JavaScript, remote_addr).await
+
+    static_file_response("/front.js", ContentType::JavaScript, ip_addr, true).await
 }
 
 #[rocket::get("/front_bg.wasm")]
-pub async fn front_bg_wasm(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+pub async fn front_bg_wasm(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
     use rocket::http::ContentType;
 
-    static_file_response("/front_bg.wasm", ContentType::WASM, remote_addr).await
+    static_file_response("/front_bg.wasm", ContentType::WASM, ip_addr, true).await
 }
 
 #[rocket::get("/index.html")]
-pub async fn index_html(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+pub async fn index_html(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
     use rocket::http::ContentType;
-    
-    static_file_response("/index.html", ContentType::HTML, remote_addr).await
+
+    static_file_response("/index.html", ContentType::HTML, ip_addr, false).await
 }
 
 #[rocket::get("/favicon.ico")]
-pub async fn favicon_ico(remote_addr: std::net::SocketAddr) -> crate::response::Response {
+pub async fn favicon_ico(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {
     use rocket::http::ContentType;
 
-    static_file_response("favicon.ico", ContentType::Icon, remote_addr).await
+    static_file_response("favicon.ico", ContentType::Icon, ip_addr, true).await
 }
 
 // The goal of this method, is to not use FileServer (because i wanna make sure of what file i serve)
-// but i can't do #[rocket::get("/<file>")] as i want to use the get root path for the download api
-#[rocket::get("/resources/<file>")]
-pub async fn static_resource(
-    file: &str,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
-    use rocket::http::Status;
+macro_rules! static_dir_server {
+    ($path:literal, $dir:literal, $func_name:ident, $allowed_files:expr) => {
+        #[rocket::get($path)]
+        pub async fn $func_name(
+            file: &str,
+            ip_addr: rocket_client_addr::ClientAddr,
+        ) -> super::response::Response {
+            use super::response::Response;
+            use rocket::http::Status;
 
-    #[rustfmt::skip]
-    const ALLOWED_FILES: &[&str] = &[
-        "bash.webp", "c.webp", "cpp.webp",
-        "csharp.webp", "css.webp", "git.webp",
-        "github.webp", "html.webp", "java.webp",
-        "javascript.webp", "kotlin.webp", "php.webp",
-        "pwsh.webp", "pwsh2.webp", "python.webp",
-        "rust.webp", "ssh.webp", "upload.png",
-        "delete.png", "storage_server.drawio.png",
-        "storage_server.drawio100px.png",
-        "storage_server.drawio200px.png",
-        "zig.webp"
-    ];
+            const ALLOWED_FILES: &[&str] = $allowed_files;
 
-    if !ALLOWED_FILES.contains(&file) {
-        return crate::response::ResponseBuilder::default()
-            .with_status(Status::NotFound)
-            .build();
-    }
+            if !ALLOWED_FILES.contains(&file) {
+                return Response::builder().with_status(Status::NotFound).build();
+            }
 
-    serve_static("/resources", file, remote_addr).await
+            serve_static(concat!("/", $dir), file, ip_addr, true).await
+        }
+    };
 }
 
-#[rocket::get("/css/<file>")]
-pub async fn static_css(
-    file: &str,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
-    use rocket::http::Status;
-
-    const ALLOWED_FILES: &[&str] = &[
+static_dir_server!(
+    "/css/<file>",
+    "css",
+    static_css,
+    &[
         "contact.css",
-        "home.css",
         "upload.css",
         "notification.css",
+        "home.css",
+        "light_switch.css",
         "style.css",
         "theme.css",
-    ];
-
-    if !ALLOWED_FILES.contains(&file) {
-        return crate::response::ResponseBuilder::default()
-            .with_status(Status::NotFound)
-            .build();
-    }
-
-    serve_static("/css", file, remote_addr).await
-}
-
-#[rocket::get("/lib/live/<file>")]
-pub async fn static_lib_live(
-    file: &str,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
-    use rocket::http::Status;
-
-    const ALLOWED_FILES: &[&str] = &["live.js"];
-
-    if !ALLOWED_FILES.contains(&file) {
-        return crate::response::ResponseBuilder::default()
-            .with_status(Status::NotFound)
-            .build();
-    }
-
-    serve_static("/lib/live", file, remote_addr).await
-}
-
-#[rocket::get("/lib/zoom/<file>")]
-pub async fn static_lib_zoom(
-    file: &str,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
-    use rocket::http::Status;
-    
-    const ALLOWED_FILES: &[&str] = &["zoom.js", "zoom.css"];
-
-    if !ALLOWED_FILES.contains(&file) {
-        return crate::response::ResponseBuilder::default()
-            .with_status(Status::NotFound)
-            .build();
-    }
-
-    serve_static("/lib/zoom", file, remote_addr).await
-}
+        "not_found.css",
+    ]
+);
+static_dir_server!(
+    "/resources/<file>",
+    "resources",
+    static_resource,
+    &[
+        "delete.png",
+        "upload.png",
+        "github.webp",
+        "storage_server.drawio.png",
+        "storage_server.drawio100px.png",
+        "storage_server.drawio200px.png",
+    ]
+);
 
 pub async fn serve_static(
     path: &str,
     file: &str,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
+    ip_addr: rocket_client_addr::ClientAddr,
+    cache: bool,
+) -> super::response::Response {
     use rocket::http::ContentType;
-    
+
     #[inline]
     fn ext(file_name: &str) -> Option<&str> {
         if !file_name.contains(".") {
@@ -166,41 +143,37 @@ pub async fn serve_static(
             ContentType::Any
         });
 
-    info!("Serving {path}/{file} w/ type: {content_type:?}");
-
-    static_file_response(&format!("{path}/{file}"), content_type, remote_addr).await
+    static_file_response(&format!("{path}/{file}"), content_type, ip_addr, cache).await
 }
 
 async fn static_file_response(
     path: &str,
     content_type: rocket::http::ContentType,
-    remote_addr: std::net::SocketAddr,
-) -> crate::response::Response {
+    ip_addr: rocket_client_addr::ClientAddr,
+    cache: bool,
+) -> super::response::Response {
+    use super::response::Response;
     use rocket::http::Status;
+    use tokio::fs::File;
 
-    async fn read_static(path: &str, remote_addr: std::net::SocketAddr) -> Option<Vec<u8>> {
-        let mut buffer = Vec::new();
+    match File::open(format!("./static/{path}")).await {
+        Ok(file) => {
+            // trace!("Static file query from {ip_addr}: {path}");
+            let mut response = Response::builder()
+                .with_status(Status::Ok)
+                .with_content(file)
+                .with_content_type(content_type);
 
-        let size = rocket::tokio::fs::File::open(format!("./static/{path}"))
-            .await
-            .ok()?
-            .read_to_end(&mut buffer)
-            .await
-            .ok()?;
+            if cache {
+                response = response.with_header("Cache-Control", "max-age=3600")
+                // Ask the browser to cache the request for 1 hour, might help for server load
+            }
 
-        trace!("Static file query from {remote_addr}: {path} ({size} bytes)");
-        Some(buffer)
-    }
-
-    // here we coul maybe use streaming
-    match read_static(path, remote_addr).await {
-        Some(bytes) => crate::response::ResponseBuilder::default()
-            .with_status(Status::Ok)
-            .with_content(bytes)
-            .with_content_type(content_type)
-            .build(),
-        None => crate::response::ResponseBuilder::default()
-            .with_status(Status::NotFound)
-            .build(),
+            response.build()
+        }
+        Err(e) => {
+            warn!("Static file query from {ip_addr}: {path} failed due to: {e}");
+            Response::builder().with_status(Status::NotFound).build()
+        }
     }
 }

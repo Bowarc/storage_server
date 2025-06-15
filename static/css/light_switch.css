@@ -1,0 +1,92 @@
+#theme-switch {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  transition: 0.5s;
+  /* padding-right: 20%; */
+}
+
+#theme-switch input {
+  display: none;
+}
+
+#theme-switch .display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  float: right;
+  margin-top: 0.5vh;
+  padding-right: 0.3vw;
+}
+
+#theme-switch label {
+  width: 40px;
+  height: 20px;
+  border-radius: 99px;
+  background: #F3F3F3;
+  /* box-shadow: 10px 10px 30px rgba(0, 0, 0, 0.05) inset; */
+  cursor: pointer;
+  position: relative;
+}
+
+#theme-switch .circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 9px;
+  background: white;
+  box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05),
+    -1px -1px 3px rgba(0, 0, 0, 0.05) inset;
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  transform: translate(10%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#theme-switch svg {
+  width: 8px;
+  position: absolute;
+  width: 10px;
+}
+
+#theme-switch .sun {
+  color: #FFD600;
+  margin-top: 0%;
+  opacity: 1;
+}
+
+#theme-switch .moon {
+  margin-top: -150%;
+  color: white;
+  opacity: 0;
+}
+
+#theme-switch input[type=checkbox]:checked+.display label {
+  background: #1F1F21;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5) inset;
+}
+
+#theme-switch input[type=checkbox]:checked+.display label .circle {
+  left: 100%;
+  transform: translate(-110%, -50%);
+  background: #2C2C2F;
+  box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.5),
+    -10px -10px 30px rgba(0, 0, 0, 0.5) inset;
+}
+
+#theme-switch input[type=checkbox]:checked+.display label .circle .sun {
+  margin-top: 150%;
+  opacity: 0;
+}
+
+#theme-switch input[type=checkbox]:checked+.display label .circle .moon {
+  margin-top: 0%;
+  opacity: 1;
+}
+
+#theme-switch label:active .circle {
+  width: 20px;
+}

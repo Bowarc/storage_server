@@ -26,6 +26,8 @@ futures = "0.3.30"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 uuid.workspace = true
 mem = { git = "https://github.com/bowarc/crates", package = "mem" }
+yew-router = "0.18.0"
+gloo-console = "0.3.0"
 
 
 [dependencies.web-sys]
@@ -49,5 +51,8 @@ features = [
   # clipboard access 2, exec command
   "HtmlDocument",
   # "Element"  # set class name (for css)
-  "HtmlTextAreaElement" # The select method on text area
+  "HtmlTextAreaElement", # The select method on text area
+
+  # Light switch
+  "MediaQueryList"
 ]

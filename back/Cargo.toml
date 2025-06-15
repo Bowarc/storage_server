@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "storage_server"
+name = "server"
 path = "src/main.rs"
 
 [dependencies]
 rocket = { version = "0.5.0", features = ["json"] }
+rocket-client-addr = { git = "https://github.com/bowarc/rocket-client-addr"}
 uuid.workspace = true
 logger = { git = "https://github.com/Bowarc/Crates.git", package = "logger", features = ["multithread", "panics"] }
 time.workspace = true

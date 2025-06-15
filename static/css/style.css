@@ -79,7 +79,7 @@ body {
 }
 
 a {
-  color: var(--accent-500);
+  color: var(--secondary-500);
   text-decoration: None;
 }
 

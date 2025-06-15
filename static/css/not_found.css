@@ -1,0 +1,9 @@
+.not_found{}
+
+
+.not-found a{
+  border: 1px solid var(--accent-200);
+  border-radius: 2px;
+  background-color: transparent;
+  padding: 1px;
+}

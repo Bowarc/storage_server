@@ -7,6 +7,7 @@ RUN rustup target add wasm32-unknown-unknown
 RUN cargo install --locked wasm-bindgen-cli
 # RUN cargo install sccache
 RUN cargo install cargo-chef
+RUN cargo install minhtml # https://github.com/wilsonzlin/minify-html
 
 ##########
 # PANNER #
@@ -46,6 +47,23 @@ COPY ./front ./front
 # Build it
 RUN sh ./scripts/build.sh release
 
+############
+# MINIFIER #
+############
+FROM base AS minifier
+
+WORKDIR /app
+
+COPY ./static ./static
+
+COPY --from=builder /app/target/wasm-bindgen/release/* ./static/
+
+RUN minhtml --minify-css ./static/css/*.css
+# RUN minhtml --minify-js ./static/lib/**/*.js # Broken
+# RUN minhtml --minify-js ./static/front.js --output ./static/front.js # Broken
+RUN minhtml --minify-doctype ./static/index.html --output ./static/index.html
+
+
 ##########
 # RUNNER #
 ##########
@@ -54,13 +72,12 @@ FROM ubuntu:22.04 AS runner
 WORKDIR /app
 
 # Here we take the rocket config from builder because it has been used to build the front end, to elimiate all TOCTOU / desync issues, we use the same one
-COPY --from=builder /app/target/release/storage_server /app/Rocket.toml .
-COPY ./static ./static
-COPY --from=builder /app/target/wasm-bindgen/release/* ./static/
+COPY --from=builder /app/target/release/server /app/Rocket.toml .
+COPY --from=minifier /app/static ./static
 
 RUN mkdir ./log
 RUN mkdir ./cache
 
 EXPOSE 42070
 
-CMD ["./storage_server"]
+CMD ["./server"]
