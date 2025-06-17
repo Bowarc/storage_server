@@ -1,5 +1,5 @@
 lazy_static! {
-    // This regex only match uuid v4
+    // uuid v4
     pub static ref UUID_VALIDATION_REGEX: regex::Regex = regex::Regex::new(
         r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
     )

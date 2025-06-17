@@ -13,6 +13,8 @@ pub enum Route {
     Default,
     #[at("/home")]
     Home,
+    #[at("/upload")]
+    Upload,
     #[at("/contact")]
     Contact,
     #[not_found]
@@ -39,6 +41,13 @@ fn Router() -> yew::Html {
                             Scene::Contact,
                         ],0)
                     }
+                    Route::Upload => {
+                        (vec![
+                            Scene::Home,
+                            Scene::Upload,
+                            Scene::Contact,
+                        ],1)
+                    },
                     Route::Contact => {
                         (vec![
                             Scene::Home,

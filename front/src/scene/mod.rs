@@ -6,6 +6,9 @@ mod home;
 pub use home::Home;
 mod not_found;
 pub use not_found::NotFound;
+use yew::Callback;
+
+use crate::Route;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Scene {
@@ -16,14 +19,22 @@ pub enum Scene {
 }
 
 impl Scene {
-    pub fn html(&self, current_scene: yew::UseStateHandle<Scene>) -> yew::virtual_dom::VNode {
+    pub fn html(&self, set_scene_cb : Callback<Scene>) -> yew::virtual_dom::VNode {
         use yew::html;
 
         match self {
-            Scene::Home => html! {<Home {current_scene}/>},
+            Scene::Home => html! {<Home {set_scene_cb}/>},
             Scene::Upload => html! {<Upload />},
             Scene::Contact => html! {<Contact />},
             Scene::NotFound => html! {<NotFound />},
+        }
+    }
+    pub fn route(&self) -> crate::Route {
+        match self{
+            Scene::Home => Route::Home,
+            Scene::Upload => Route::Upload,
+            Scene::Contact => Route::Contact,
+            Scene::NotFound => Route::NotFound,
         }
     }
 }

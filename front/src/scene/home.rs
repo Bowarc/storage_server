@@ -1,18 +1,33 @@
-use yew::{function_component, html, Callback, Html, UseStateHandle};
+use gloo::utils::window;
+use yew::{function_component, html, Callback, Html};
 
 use super::Scene;
 
 #[derive(PartialEq, yew::Properties)]
 pub struct Props {
-    pub current_scene: UseStateHandle<Scene>,
+    pub set_scene_cb: Callback<Scene>,
 }
 
 #[function_component]
 pub fn Home(props: &Props) -> Html {
+    let url = {
+        let location = window().location();
+        format!(
+            "{}//{}",
+            location.protocol().unwrap_or_else(|_| {
+                warn!("Cannot get current protocol, falling back to default");
+                String::from("https:")
+            }),
+            location.host().unwrap_or_else(|_| {
+                warn!("Cannot get current url, falling back to default");
+                String::from("storage.bowarc.ovh/")
+            })
+        )
+    };
     html! {<>
         <div class="home">
             <p class="home_main_title">{
-                "Bowarc's storage server"
+                "Bowarc's storage server, share files easily"
             }</p>
 
             <section class="home_section">
@@ -20,7 +35,7 @@ pub fn Home(props: &Props) -> Html {
                     "Welcome"
                 }</h2>
                 <p class="home_section_text">
-                    { format!("This file sharing platform doesn't require any login, you can upload files up to {:.0}.", mem::format(crate::scene::upload::SIZE_LIMIT_BYTES, &mem::Prefix::Decimal)) }
+                    { format!("This is the web interface for my file storage server, you can upload files up to {}.", mem::format(crate::scene::upload::SIZE_LIMIT_BYTES, &mem::Prefix::Binary)) }
                     <br/>
                     { "Once uploaded, your will receive a shareable download link for you to send to anyone you want."}
                 </p>
@@ -40,8 +55,9 @@ pub fn Home(props: &Props) -> Html {
                         <p class="home_section_text">
                             { "Visit " }
                             <button onclick={
-                                let current_scene_clone = props.current_scene.clone();
-                                Callback::from(move |_| current_scene_clone.set(Scene::Upload))
+                                let sscb = props.set_scene_cb.clone();
+
+                                Callback::from(move |_| sscb.emit(Scene::Upload))
                             }>{ "the upload page" }</button>
                             { ", select a file, hit upload."}
                             <br/>
@@ -54,26 +70,41 @@ pub fn Home(props: &Props) -> Html {
                             "Command line"
                         }</h3>
                         <p class="home_section_text">
-                            { "Using curl, make a simple file upload request to storage.bowarc.ovh/: " }
+                            { format!("Using curl, make a simple file upload request to {url}: ") }
+                            {{
+                                if url.contains("storage.bowarc.ovh"){
+                                // if true {
+                                    html!{<>
+                                        <br />
+                                        <br />
+                                        {"Note: On my instance (storage.bowarc.ovh/), you'll need to use credentials to upload."}
+                                        <br />
+                                        { "You can do that by adding "}
+                                        <mark>{ " -u username:password" }</mark>
+                                        { " to your curl command."}
+                                        <br />
+                                        { "You can deploy your own by visiting " }
+                                        <a href="https://github.com/bowarc/storage_server">{ "the project on github" }</a>
+                                        <br />
+                                        
+                                        </>}
+                                }else{
+                                    html!{}
+                                }
+                            }}
                             <br />
-                            <br />
-                            { "Note: On storage.bowarc.ovh/, you'll need to use credentials to upload."}
-                            <br />
-                            { "You can do that by adding "}
-                            <mark>{ " -u username:password" }</mark>
-                            { " to your curl command."}
                             <pre class="home_section_code_example">
-                                <code>{ "curl --upload-file /path/to/yourfile.ext https://storage.bowarc.ovh/" }</code>
+                                <code>{ format!("curl --upload-file /path/to/yourfile.ext {url}/") }</code>
                             </pre>
                             { "This will return a " }
                             <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">{"uuid"}</a>
-                            { " that you can use as url path to acces your file !"}
+                            { "(v4) that you can use to acces your file !"}
                             <pre class="home_section_code_example">
-                                <code>{ "curl https://storage.bowarc.ovh/<your uuid> -o myfile.txt" }</code>
+                                <code>{ format!("curl {url}/<your uuid> -o myfile.txt") }</code>
                             </pre>
                             { " You can use the -O tag if you add the file name to the path like this: " }
                             <pre class="home_section_code_example">
-                                <code>{ "curl storage.bowarc.ovh/<your uuid>/yourfile.ext -O" }</code>
+                                <code>{ format!("curl {url}/<your uuid>/yourfile.ext -O") }</code>
                             </pre>
                             { "If you try to download a file with a name that doesn't exist, you might see a response like this:" }
                             <pre class="home_section_code_example">

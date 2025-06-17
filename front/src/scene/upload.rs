@@ -405,7 +405,7 @@ impl yew::Component for Upload {
 
         yew::html! {<div class="upload_view">
             <button class="upload_button" onclick={ctx.link().callback(|_| Message::Upload)}>
-                { "Upload !" }
+                { "Upload!" }
             </button>
             <label
                 class = "upload_dragdrop"
