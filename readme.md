@@ -52,7 +52,7 @@ cd ./storage_server
 #### Build it
 
 ```console
-docker build -t storage_server:latest .
+sh scripts/docker_build.sh
 ```
 
 #### Deploy it
@@ -77,14 +77,15 @@ This will enable some optimisations but make the compilation a bit slower.
 Start by running `sh scripts/init.sh`  
 This will create some important folders in the project directory, which the server relies on.
 
-#### Build everything
-`sh scripts/build.sh`
 
 #### Build back
 `sh scripts/build_back.sh`
 
 #### Build front
 `sh scripts/build_front.sh`
+
+#### Or Build everything with one command
+`sh scripts/build.sh`
 
 ### Run
 To run the server, use `sh scripts/run.sh`  
