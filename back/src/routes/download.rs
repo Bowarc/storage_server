@@ -6,15 +6,30 @@ lazy_static! {
     .unwrap();
 }
 
-#[inline]
-pub fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError> {
-    use {crate::error::UuidParseError, std::str::FromStr, uuid::Uuid};
+pub struct UuidWrapper(uuid::Uuid);
 
-    if !UUID_VALIDATION_REGEX.is_match(raw_id) {
-        return Err(UuidParseError::Regex);
+impl<'p> rocket::request::FromParam<'p> for UuidWrapper {
+    type Error = crate::error::UuidParseError;
+
+    fn from_param(param: &'p str) -> Result<Self, Self::Error> {
+        use {crate::error::UuidParseError, std::str::FromStr, uuid::Uuid};
+
+        if !UUID_VALIDATION_REGEX.is_match(param) {
+            return Err(UuidParseError::Regex);
+        }
+
+        Ok(UuidWrapper(
+            Uuid::from_str(param).map_err(|_e| UuidParseError::Convert)?,
+        ))
     }
+}
 
-    Uuid::from_str(raw_id).map_err(|_e| UuidParseError::Convert)
+impl std::ops::Deref for UuidWrapper {
+    type Target = uuid::Uuid;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 ///
@@ -25,48 +40,52 @@ pub fn parse_id(raw_id: &str) -> Result<uuid::Uuid, crate::error::UuidParseError
 ///     It returns, file cache's content, decompressed and in an directly usable format.
 ///         As for the filename, it sets the 'Content-Disposition' header for the browser to interpret
 ///
-#[rocket::get("/<id>")]
+#[rocket::get("/<uuidw>")]
 pub async fn api_download(
-    id: &str,
+    uuidw: Option<UuidWrapper>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+
+    // About the optional uuidw and the ugly ton of params:
+    //  The routing system in rocket works a bit weirdly, since you can only have 1
+    //  wilcard per route level (you can't have two routes that have "/<something>" refering to two different types)
+    //
+    //  This, coupled with the fact that forcing a route to comform to a type, makes an useless warn! log when
+    //  it doesn't match, makes it so i have to do the error part of the routing myself
+    //
+    //  So.. we have this monstruosity, where I need to query the error log infos with the happy path
+    //  (and make my 404 route a two function thing)
+    //
+    //  this also have the effect to move the path to uuid conversion to the fromparam trait
+    addr: Option<rocket_client_addr::ClientAddr>,
+    method: rocket::http::Method,
+    uri: &rocket::http::uri::Origin<'_>,
+    c_type: Option<&rocket::http::ContentType>,
 ) -> crate::response::Response {
     use {
-        crate::{
-            cache::Cache,
-            error::{CacheError, UuidParseError},
-            response::ResponseBuilder,
-        },
+        crate::{cache::Cache, error::CacheError, response::ResponseBuilder},
         rocket::http::{ContentType, Status},
         std::time::Instant,
     };
 
     let start_timer = Instant::now();
 
-    info!("Request of {id}");
-
-    let uuid = match parse_id(id) {
-        Ok(uuid) => uuid,
-        Err(UuidParseError::Regex) => {
-            error!("[{id}] Given id doesn't match expected character range");
-            return ResponseBuilder::default()
-                .with_status(Status::BadRequest)
-                .with_content("Given id doesn't match expected character range")
-                .with_content_type(ContentType::Text)
-                .build();
-        }
-        Err(UuidParseError::Convert) => {
-            error!("[{id}] Invalid id");
-            return ResponseBuilder::default()
-                .with_status(Status::BadRequest)
-                .with_content(format!("Invalid id: {id}"))
-                .with_content_type(ContentType::Text)
-                .build();
-        }
+    let Some(uuidw) = uuidw else {
+        let addr_string = if let Some(addr) = addr {
+            addr.get_ipv4_string()
+                .unwrap_or_else(|| addr.get_ipv6_string())
+        } else {
+            "UNKNOWN ADDRESS".to_string()
+        };
+        return crate::catchers::inner_404(addr_string, method, uri, c_type).await;
     };
+
+    let uuid = *uuidw;
+
+    info!("Request of {uuid}");
 
     let cache_handle = cache.read().await;
 
-    let cache_entry = match cache_handle.get_entry(uuid).await{
+    let cache_entry = match cache_handle.get_entry(uuid).await {
         Ok(entry) => entry,
         Err(CacheError::NotFound { uuid }) => {
             error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
@@ -76,7 +95,7 @@ pub async fn api_download(
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let load_result = Cache::load(cache_entry);
@@ -94,7 +113,7 @@ pub async fn api_download(
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        Err(CacheError::FileOpen{file, why}) => {
+        Err(CacheError::FileOpen { file, why }) => {
             error!("[{uuid}] Failled to open data file ({file}) due to: {why}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
@@ -102,7 +121,7 @@ pub async fn api_download(
                 .with_content_type(ContentType::Text)
                 .build();
         }
-        Err(CacheError::FileRead{file, why}) => {
+        Err(CacheError::FileRead { file, why }) => {
             error!("[{uuid}] Failled to read {file} due to: {why}");
             return ResponseBuilder::default()
                 .with_status(Status::InternalServerError)
@@ -149,18 +168,24 @@ pub async fn api_download(
 ///
 ///     This route is a proxy and mostly for curl users to be able to use '-O' (download with auto file name)
 ///
-#[rocket::get("/<id>/<filename>")]
+#[rocket::get("/<uuidw>/<filename>")]
 pub async fn api_download_filename(
-    id: &str,
+    uuidw: UuidWrapper,
     filename: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+
+    // Ewww
+    addr: Option<rocket_client_addr::ClientAddr>,
+    method: rocket::http::Method,
+    uri: &rocket::http::uri::Origin<'_>,
+    c_type: Option<&rocket::http::ContentType>,
 ) -> crate::response::Response {
     use {
         crate::response::ResponseBuilder,
         rocket::http::{ContentType, Status},
     };
 
-    let resp = api_download(id, cache).await;
+    let resp = api_download(Some(uuidw), cache, addr, method, uri, c_type).await;
 
     if resp.status() != &Status::Ok {
         // If the internal call returned an error, there is no point doing the filename verification

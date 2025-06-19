@@ -1,6 +1,6 @@
-#[allow(unused_imports)]
-#[macro_use]
-extern crate thiserror;
+// #[allow(unused_imports)]
+// #[macro_use]
+// extern crate thiserror;
 
 #[macro_use(trace, debug, info, warn, error)]
 extern crate log;
@@ -15,7 +15,6 @@ mod response;
 mod routes;
 
 static mut FILE_REQ_SIZE_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
-
 // Needed for tests
 pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     let Some(cache) = cache::Cache::new() else {
@@ -25,7 +24,10 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
 
     let rocket = rocket::build()
         .manage(rocket::tokio::sync::RwLock::new(cache))
-        .register("/", rocket::catchers![catchers::root_403])
+        .register(
+            "/",
+            rocket::catchers![catchers::root_403, catchers::root_404],
+        )
         .register(
             "/upload",
             rocket::catchers![catchers::upload_400, catchers::upload_413],
@@ -33,6 +35,8 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
         .mount(
             "/",
             rocket::routes![
+                // iroute,
+                // sroute,
                 routes::root,
                 routes::home,
                 routes::upload,
@@ -47,8 +51,7 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
                 routes::api_upload,
                 routes::api_download,
                 routes::api_download_filename,
-                routes::info
-                // routes::api_download_head,
+                routes::info // routes::api_download_head,
             ],
         )
         .ignite()
@@ -69,7 +72,11 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
 
 #[rocket::main]
 async fn main() {
-    let filters = [("rocket", log::LevelFilter::Warn)];
+    use log::LevelFilter;
+    let filters = [
+        ("rocket", LevelFilter::Warn),
+        ("rocket::server.rs", LevelFilter::Off), // on 0.5.1, it only has infos about querying a 404 and catcher panicking
+    ];
     let _log_handle = logger::init([
         logger::Config::default()
             .output(logger::Output::Stdout)
@@ -81,6 +88,13 @@ async fn main() {
                 std::time::Duration::from_secs(86400), // A day
             ))
             .filters(&filters),
+        logger::Config::default()
+            .output(logger::Output::new_timed_file(
+                "./log/rocket.log",
+                std::time::Duration::from_secs(86400), // A day
+            ))
+            .level(LevelFilter::Off)
+            .filter("rocket", LevelFilter::Trace),
     ]);
 
     // Small print to show the start of the program log in the file
