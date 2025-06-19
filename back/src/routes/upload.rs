@@ -2,7 +2,7 @@ lazy_static! {
     static ref FILENAME_VALIDATION_REGEX: regex::Regex =
         regex::Regex::new(r"^[a-zA-Z0-9_.-]{1,100}$").unwrap();
     // This regex is really simple:
-    // 
+    //
     // All basic latin letters are allowed, can be uppercase,
     // All arabic numbers are allowed
     // undercore, dot, hyphen are allowed, all other symbols are denied (I don't like spaces in file names)

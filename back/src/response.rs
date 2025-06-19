@@ -45,7 +45,6 @@ impl From<tokio::fs::File> for ResponseContent {
     }
 }
 
-
 pub struct Response {
     status: rocket::http::Status,
     headers: std::collections::HashMap<String, String>,

@@ -13,7 +13,7 @@ pub enum CacheError {
 
     #[error("Could not write to file '{file}' due to: {why}")]
     FileWrite { file: String, why: std::io::Error },
-    
+
     #[error("Could not remove to file '{file}' due to: {why}")]
     FileRemove { file: String, why: std::io::Error },
 
@@ -33,9 +33,9 @@ pub enum CacheError {
     NotReady { uuid: uuid::Uuid },
 
     #[error("Serialization error while {context} due to {why}")]
-    Serialization{
+    Serialization {
         context: String, // Extremely short description of what was atempted to do
-        why: rocket::serde::json::serde_json::Error
+        why: rocket::serde::json::serde_json::Error,
     },
 
     #[error("Could not deserialize file '{file}' due to: {why}")]

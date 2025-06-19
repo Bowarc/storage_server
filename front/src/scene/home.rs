@@ -86,7 +86,7 @@ pub fn Home(props: &Props) -> Html {
                                         { "You can deploy your own by visiting " }
                                         <a href="https://github.com/bowarc/storage_server">{ "the project on github" }</a>
                                         <br />
-                                        
+
                                         </>}
                                 }else{
                                     html!{}

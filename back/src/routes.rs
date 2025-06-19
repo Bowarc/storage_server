@@ -1,7 +1,7 @@
-#[path = "routes/info.rs"]
-mod info_route;
 #[path = "routes/download.rs"]
 mod download_route;
+#[path = "routes/info.rs"]
+mod info_route;
 #[path = "routes/upload.rs"] // Naming conflict in main when registering route
 mod upload_route;
 
@@ -11,7 +11,6 @@ pub use download_route::*;
 pub use info_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;
-
 
 // Here are routes that are managed by the front end router, so just serve the page and let it do it's things
 macro_rules! front_route {
@@ -29,7 +28,6 @@ front_route!(home, "/home");
 front_route!(upload, "/upload");
 front_route!(contact, "/contact");
 front_route!(_404, "/404");
-
 
 #[rocket::get("/")]
 pub async fn root(ip_addr: rocket_client_addr::ClientAddr) -> super::response::Response {

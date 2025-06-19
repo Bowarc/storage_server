@@ -28,7 +28,6 @@ pub fn App(props: &Props) -> Html {
 
     let current_scene = use_state(|| current_scene_default);
 
-
     let nav_opt = use_navigator();
     let cs = current_scene.clone();
     let set_scene_cb = Callback::from(move |scene: Scene| {

@@ -347,7 +347,7 @@ async fn store_data_sync(
         "totals:\nRead: {}\nWrote: {}\nRemoved: {:.3}%",
         total_read,
         file_size,
-        100.- (file_size as f64 / total_read as f64) * 100.
+        100. - (file_size as f64 / total_read as f64) * 100.
     );
 
     entry.set_data_size(file_size);

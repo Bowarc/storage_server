@@ -78,7 +78,7 @@ pub fn LightSwitch() -> Html {
         {
             set_theme_clone.emit(String::from("dark"));
             break 'theme_detection;
-        }else{
+        } else {
             set_theme_clone.emit(String::from("light"));
             break 'theme_detection;
         }

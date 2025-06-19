@@ -402,7 +402,6 @@ impl yew::Component for Upload {
     fn view(&self, ctx: &yew::Context<Self>) -> yew::Html {
         use yew::TargetCast as _;
 
-
         yew::html! {<div class="upload_view">
             <button class="upload_button" onclick={ctx.link().callback(|_| Message::Upload)}>
                 { "Upload!" }

@@ -4,7 +4,7 @@ use yew::{function_component, html, Html};
 pub fn NotFound() -> Html {
     if let Some(nav) = yew_router::hooks::use_navigator() {
         nav.replace(&crate::Route::NotFound)
-    }else{
+    } else {
         error!("Failed to retrieve the navigator")
     }
 

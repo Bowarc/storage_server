@@ -101,10 +101,7 @@ pub struct UploadInfo {
 
 impl UploadInfo {
     pub fn new(name: String, extension: String) -> Self {
-        Self {
-            name,
-            extension,
-        }
+        Self { name, extension }
     }
 
     pub fn name(&self) -> &String {

@@ -15,11 +15,11 @@ pub enum Scene {
     Home,
     Upload,
     Contact,
-    NotFound
+    NotFound,
 }
 
 impl Scene {
-    pub fn html(&self, set_scene_cb : Callback<Scene>) -> yew::virtual_dom::VNode {
+    pub fn html(&self, set_scene_cb: Callback<Scene>) -> yew::virtual_dom::VNode {
         use yew::html;
 
         match self {
@@ -30,7 +30,7 @@ impl Scene {
         }
     }
     pub fn route(&self) -> crate::Route {
-        match self{
+        match self {
             Scene::Home => Route::Home,
             Scene::Upload => Route::Upload,
             Scene::Contact => Route::Contact,
