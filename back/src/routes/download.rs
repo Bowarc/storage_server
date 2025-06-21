@@ -56,7 +56,7 @@ pub async fn api_download(
     //  (and make my 404 route a two function thing)
     //
     //  this also have the effect to move the path to uuid conversion to the fromparam trait
-    addr: Option<rocket_client_addr::ClientAddr>,
+    addr: rocket_client_addr::ClientAddr,
     method: rocket::http::Method,
     uri: &rocket::http::uri::Origin<'_>,
     c_type: Option<&rocket::http::ContentType>,
@@ -70,18 +70,15 @@ pub async fn api_download(
     let start_timer = Instant::now();
 
     let Some(uuidw) = uuidw else {
-        let addr_string = if let Some(addr) = addr {
-            addr.get_ipv4_string()
-                .unwrap_or_else(|| addr.get_ipv6_string())
-        } else {
-            "UNKNOWN ADDRESS".to_string()
-        };
+        let addr_string = addr
+            .get_ipv4_string()
+            .unwrap_or_else(|| addr.get_ipv6_string());
         return crate::catchers::inner_404(addr_string, method, uri, c_type).await;
     };
 
     let uuid = *uuidw;
 
-    info!("Request of {uuid}");
+    info!("[{addr}] DOWNLOAD request of {uuid}",);
 
     let cache_handle = cache.read().await;
 
@@ -173,9 +170,9 @@ pub async fn api_download_filename(
     uuidw: UuidWrapper,
     filename: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    client_addr: rocket_client_addr::ClientAddr,
 
     // Ewww
-    addr: Option<rocket_client_addr::ClientAddr>,
     method: rocket::http::Method,
     uri: &rocket::http::uri::Origin<'_>,
     c_type: Option<&rocket::http::ContentType>,
@@ -185,7 +182,7 @@ pub async fn api_download_filename(
         rocket::http::{ContentType, Status},
     };
 
-    let resp = api_download(Some(uuidw), cache, addr, method, uri, c_type).await;
+    let resp = api_download(Some(uuidw), cache, client_addr, method, uri, c_type).await;
 
     if resp.status() != &Status::Ok {
         // If the internal call returned an error, there is no point doing the filename verification

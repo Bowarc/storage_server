@@ -14,6 +14,7 @@ pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    addr: rocket_client_addr::ClientAddr,
 ) -> crate::response::Response {
     use {
         crate::response::Response,
@@ -31,7 +32,7 @@ pub async fn api_upload(
     // let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/;
 
     debug!(
-        "Received new upload request \nUsing id: {uuid}\nUsername: {}\nFile name: {}",
+        "Received new upload request from {addr}\nUsing id: {uuid}\nUsername: {}\nFile name: {}",
         "NO_USER", filename,
     );
 

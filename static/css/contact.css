@@ -1,8 +1,9 @@
-.contact > ul{
-    list-style-type: none;
-/*    background-color: red;*/
+#contact>table {
+  display: inline-block;
+  text-align: left;
 }
 
-.contact{
-    text-align: center;
+#contact>table>tr>th {
+  padding-right: 20px;
 }
+

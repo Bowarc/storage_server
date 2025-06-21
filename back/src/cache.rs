@@ -130,7 +130,7 @@ impl Cache {
         Ok(())
     }
 
-    // Load a stored cache
+    // Load a stored cache entry
     pub fn load(
         entry: std::sync::Arc<data::CacheEntry>,
     ) -> Result<(data::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError> {
@@ -161,6 +161,38 @@ impl Cache {
         })?;
 
         Ok((entry.upload_info().clone(), Box::new(decoder)))
+    }
+
+    /// Delete a cache entry
+    pub async fn delete(
+        entry: std::sync::Arc<data::CacheEntry>,
+    ) -> Result<(), crate::error::CacheError> {
+        let id = entry.uuid();
+        let meta_path = format!("{CACHE_DIRECTORY}/{id}.meta");
+        let data_path = format!("{CACHE_DIRECTORY}/{id}.data");
+
+        match futures::join!(
+            tokio::fs::remove_file(&meta_path),
+            tokio::fs::remove_file(&data_path),
+        ) {
+            (Ok(_), Ok(_)) => Ok(()),
+            (Ok(_), Err(e)) => Err(crate::error::CacheError::FileRemove {
+                file: data_path,
+                why: e,
+            }),
+            (Err(e), Ok(_)) => Err(crate::error::CacheError::FileRemove {
+                file: meta_path,
+                why: e,
+            }),
+            (Err(e), Err(e2)) => {
+                error!("{e}, {e2}");
+
+                Err(crate::error::CacheError::FileRemove {
+                    file: format!("{meta_path} and {data_path}"),
+                    why: e,
+                })
+            }
+        }
     }
 }
 
