@@ -29,7 +29,6 @@ pub async fn api_delete(
     let uuid = *uuidw;
 
     info!("[{addr}] DELETE request of {uuid}");
-    debug!("Cache: {:?}", cache.read().await);
 
     let Some(entry) = cache
         .read()
