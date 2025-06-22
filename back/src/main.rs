@@ -17,7 +17,7 @@ mod routes;
 static mut FILE_REQ_SIZE_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
 // Needed for tests
 pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
-    let Some(cache) = cache::Cache::new() else {
+    let Some(cache) = cache::init_cache_list_from_cache_dir() else {
         error!("Failled to load cache");
         std::process::exit(1)
     };

@@ -102,13 +102,17 @@ pub fn Home(props: &Props) -> Html {
                             <pre class="home_section_code_example">
                                 <code>{ format!("curl {url}/<your uuid> -o myfile.txt") }</code>
                             </pre>
-                            { " You can use the -O tag if you add the file name to the path like this: " }
+                            { "You can use the -O tag if you add the file name to the path like this: " }
                             <pre class="home_section_code_example">
                                 <code>{ format!("curl {url}/<your uuid>/yourfile.ext -O") }</code>
                             </pre>
                             { "If you try to download a file with a name that doesn't exist, you might see a response like this:" }
                             <pre class="home_section_code_example">
                                 <code>{ "Incorrect file name, did you mean 'yourfile.ext'?" }</code>
+                            </pre>
+                            { "To delete a file, just send a DELETE request like so: " }
+                            <pre class="home_section_code_example">
+                                <code>{ format!("curl {url}/<your uuid> -X DELETE") }</code>
                             </pre>
                         </p>
                     </section>

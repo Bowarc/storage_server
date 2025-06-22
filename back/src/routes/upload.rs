@@ -13,16 +13,16 @@ lazy_static! {
 pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
     addr: rocket_client_addr::ClientAddr,
 ) -> crate::response::Response {
     use {
-        crate::response::Response,
+        crate::{cache::CacheEntry, response::Response},
         rocket::{
             data::ByteUnit,
             http::{ContentType, Status},
         },
-        std::time::Instant,
+        std::{sync::Arc, time::Instant},
         uuid::Uuid,
     };
 
@@ -50,20 +50,15 @@ pub async fn api_upload(
     // File size check are done in the store data function in cache.rs
     let data_stream = raw_data.open(ByteUnit::max_value());
 
-    let mut cache_handle = cache.write().await;
-
-    let cache_entry = cache_handle.new_entry(
+    let entry = Arc::new(CacheEntry::new(
         uuid,
-        crate::cache::data::UploadInfo::new(
+        crate::cache::UploadInfo::new(
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
         ),
-    );
+    ));
 
-    // Release the lock to let others use it
-    drop(cache_handle);
-
-    if let Err(e) = crate::cache::Cache::store(cache_entry, data_stream).await {
+    if let Err(e) = entry.clone().store(data_stream).await {
         error!("[{uuid}] An error occured while storing the given data: {e}");
         return Response::builder()
             .with_status(Status::InternalServerError)
@@ -71,6 +66,8 @@ pub async fn api_upload(
             .with_content_type(ContentType::Text)
             .build();
     };
+
+    cache.write().await.push(entry);
 
     info!(
         "[{uuid}] Responded in {}",
@@ -108,7 +105,7 @@ fn get_file_extension(name: &str) -> Option<String> {
 mod tests {
     use {
         crate::build_rocket,
-        rocket::{http::Status, local::asynchronous::Client},
+        rocket::{http::{Status, Header}, local::asynchronous::Client},
         std::str::FromStr,
     };
 
@@ -119,8 +116,8 @@ mod tests {
             .expect("valid rocket instance");
         let response = client
             .put("/test.file")
-            .header(rocket::http::ContentType::Text)
             .body("This is normal file content")
+            .header(Header::new("x-forwarded-for", "0.0.0.0"))
             .dispatch()
             .await;
 

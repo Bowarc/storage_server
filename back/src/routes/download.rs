@@ -43,7 +43,7 @@ impl std::ops::Deref for UuidWrapper {
 #[rocket::get("/<uuidw>")]
 pub async fn api_download(
     uuidw: Option<UuidWrapper>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
 
     // About the optional uuidw and the ugly ton of params:
     //  The routing system in rocket works a bit weirdly, since you can only have 1
@@ -62,7 +62,7 @@ pub async fn api_download(
     c_type: Option<&rocket::http::ContentType>,
 ) -> crate::response::Response {
     use {
-        crate::{cache::Cache, error::CacheError, response::ResponseBuilder},
+        crate::{error::CacheError, response::ResponseBuilder},
         rocket::http::{ContentType, Status},
         std::time::Instant,
     };
@@ -80,27 +80,22 @@ pub async fn api_download(
 
     info!("[{addr}] DOWNLOAD request of {uuid}",);
 
-    let cache_handle = cache.read().await;
-
-    let cache_entry = match cache_handle.get_entry(uuid).await {
-        Ok(entry) => entry,
-        Err(CacheError::NotFound { uuid }) => {
-            error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
-            return ResponseBuilder::default()
-                .with_status(Status::NotFound)
-                .with_content("The given id doesn't correspond to any cache entry")
-                .with_content_type(ContentType::Text)
-                .build();
-        }
-        _ => unreachable!(),
+    let Some(cache_entry) = cache
+        .read()
+        .await
+        .iter()
+        .find(|entry| entry.uuid() == uuid)
+        .cloned()
+    else {
+        error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
+        return ResponseBuilder::default()
+            .with_status(Status::NotFound)
+            .with_content("The given id doesn't correspond to any cache entry")
+            .with_content_type(ContentType::Text)
+            .build();
     };
 
-    let load_result = Cache::load(cache_entry);
-
-    // Keep the lock for the minimum amount of time
-    drop(cache_handle);
-
-    let (meta, data_stream) = match load_result {
+    let (meta, data_stream) = match cache_entry.load() {
         Ok(meta_data) => meta_data,
         Err(CacheError::NotReady { uuid }) => {
             error!("[{uuid}] The requested cache is not ready yet");
@@ -169,7 +164,7 @@ pub async fn api_download(
 pub async fn api_download_filename(
     uuidw: UuidWrapper,
     filename: &str,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
     client_addr: rocket_client_addr::ClientAddr,
 
     // Ewww
@@ -245,6 +240,7 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_download() {
+        use rocket::http::Header;
         let base_filename = "test.file";
 
         let uuid = {
@@ -256,6 +252,7 @@ mod tests {
             let response = client
                 .put(format!("/{base_filename}"))
                 .header(rocket::http::ContentType::Text)
+                .header(Header::new("x-forwarded-for", "0.0.0.0"))
                 .body("This is a cool file content")
                 .dispatch()
                 .await;
@@ -279,6 +276,7 @@ mod tests {
 
         let response = client
             .get(format!("/{uuid}", uuid = uuid.hyphenated()))
+            .header(Header::new("x-forwarded-for", "0.0.0.0"))
             .dispatch()
             .await;
 
@@ -291,6 +289,7 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_download_filename() {
+        use rocket::http::Header;
         let base_filename = "test.file";
 
         let uuid = {
@@ -300,8 +299,8 @@ mod tests {
                 .expect("valid rocket instance");
             let response = client
                 .put(format!("/{base_filename}"))
-                .header(rocket::http::ContentType::Text)
                 .body("This is a co")
+                .header(Header::new("x-forwarded-for", "0.0.0.0"))
                 .dispatch()
                 .await;
 
@@ -324,6 +323,7 @@ mod tests {
 
         let response = client
             .get(format!("/{uuid}/{base_filename}", uuid = uuid.hyphenated()))
+            .header(Header::new("x-forwarded-for", "0.0.0.0"))
             .dispatch()
             .await;
 

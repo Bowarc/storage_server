@@ -41,6 +41,14 @@ def download(uuid: str, file_name: str):
 
     print("Done\n")
 
+def delete(uuid: str):
+    print(f"Deleting {uuid}")
+
+    response = requests.delete(f"http://127.0.0.1:42070/{uuid}") # Assuming a server is running at that address
+
+    print(f"Delete status code: {response.status_code}\n")
+
+
 def main():
     file_name = "100mb.data"
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'samples', file_name)):
@@ -58,10 +66,13 @@ def main():
 
     download(uuid, file_name)
 
+    delete(uuid)
+
     examples_path = os.path.join(os.path.dirname(__file__))
     examples_path_short = f"{examples_path}".replace(os.getcwd(), "")
 
     print(f"You can use `diff .{examples_path_short}/samples/{file_name} .{examples_path_short}/out/{file_name}`\nIf you see no output, it means that the files are identical")
+
 
 if __name__ == "__main__":
     main()

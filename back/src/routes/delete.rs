@@ -7,7 +7,7 @@
 #[rocket::delete("/<uuidw>")]
 pub async fn api_delete(
     uuidw: Option<super::UuidWrapper>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::Cache>>,
+    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
 
     // See route::download's comment
     addr: rocket_client_addr::ClientAddr,
@@ -29,18 +29,22 @@ pub async fn api_delete(
     let uuid = *uuidw;
 
     info!("[{addr}] DELETE request of {uuid}");
+    debug!("Cache: {:?}", cache.read().await);
 
-    let entry = match cache.read().await.get_entry(uuid).await {
-        Ok(entry) => entry,
-        Err(e) => {
-            error!("Failed to get entry due to: {e}");
-            return Response::builder()
-                .with_status(Status::InternalServerError)
-                .build();
-        }
+    let Some(entry) = cache
+        .read()
+        .await
+        .iter()
+        .find(|entry| entry.uuid() == uuid)
+        .cloned()
+    else {
+        error!("Could not find entry for {uuid}");
+        return Response::builder()
+            .with_status(Status::InternalServerError)
+            .build();
     };
 
-    if let Err(e) = crate::cache::Cache::delete(entry).await {
+    if let Err(e) = entry.delete().await {
         error!("Failed to delete {uuid} due to: {e}");
 
         return Response::builder()
@@ -50,5 +54,61 @@ pub async fn api_delete(
 
     debug!("Successfully deleted {uuid}");
 
+    cache.write().await.retain(|entry| entry.uuid() != uuid);
+
     Response::builder().build()
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::build_rocket,
+        rocket::{http::Status, local::asynchronous::Client},
+        std::str::FromStr,
+    };
+
+    #[rocket::async_test]
+    async fn test_delete() {
+        use rocket::http::Header;
+        let base_filename = "test.file";
+
+        let uuid = {
+            // Setup
+            let client = Client::tracked(build_rocket().await)
+                .await
+                .expect("valid rocket instance");
+
+            let response = client
+                .put(format!("/{base_filename}"))
+                .header(rocket::http::ContentType::Text)
+                .header(Header::new("x-forwarded-for", "0.0.0.0"))
+                .body("This is a cool file content")
+                .dispatch()
+                .await;
+
+            #[allow(deprecated)] // stfu ik
+            std::thread::sleep_ms(500);
+
+            assert_eq!(response.status(), Status::Created);
+
+            let rs = response.into_string().await.unwrap();
+
+            info!("{}", rs);
+
+            let suuid = rs.replace("Success: ", "");
+            uuid::Uuid::from_str(&suuid).unwrap()
+        };
+
+        let client = Client::tracked(build_rocket().await)
+            .await
+            .expect("valid rocket instance");
+
+        let response = client
+            .delete(format!("/{uuid}", uuid = uuid.hyphenated()))
+            .header(Header::new("x-forwarded-for", "0.0.0.0"))
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Ok);
+    }
 }

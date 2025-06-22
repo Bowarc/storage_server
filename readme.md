@@ -110,6 +110,11 @@ This yields back an uuid that is used by the server to identify that file
 curl http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext -O
 ```
 
+#### Delete a file
+```console
+curl http://<YOUR_ADDRESS:YOUR_PORT>/<UUID> -X DELETE
+```
+
 > **_NOTE:_** On browser you only need the UUID as it auto redirects to the right file name  
 (```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>``` -> ```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext```).  
     Take a look at [#7](https://github.com/Bowarc/storage_server/issues/7) for more informations.

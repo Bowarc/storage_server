@@ -44,8 +44,14 @@ pub enum CacheError {
         why: rocket::serde::json::serde_json::Error,
     },
 
-    #[error("The given id ({uuid}) could not be parsed into an uuid")]
-    InvalidId { uuid: uuid::Uuid },
+    #[error("The given string ({value}) could not be parsed into an uuid")]
+    InvalidId { value: String },
+
+    #[error("Wrong file type, expected: '{expected}' but got '{actual}'")]
+    WrongFileType { expected: String, actual: String },
+
+    #[error("Multiple errors occured: {0:?}")]
+    Multiple(Vec<Self>)
 }
 
 #[derive(Debug, thiserror::Error)]

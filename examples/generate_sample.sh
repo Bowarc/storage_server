@@ -2,8 +2,10 @@
 
 examples_dir="$(dirname "$(realpath "$0")")"
 samples_dir="${examples_dir}/samples"
+out_dir="${examples_dir}/out"
 
 mkdir -p "$samples_dir"
+mkdir -p "$out_dir"
 
 output_file="$samples_dir/100mb.data"
 
