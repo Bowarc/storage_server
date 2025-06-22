@@ -30,12 +30,13 @@ pub async fn api_delete(
 
     info!("[{addr}] DELETE request of {uuid}");
 
-    let Some(entry) = cache
+    let Some((index, entry)) = cache
         .read()
         .await
         .iter()
-        .find(|entry| entry.uuid() == uuid)
-        .cloned()
+        .enumerate()
+        .find(|(_, entry)| entry.uuid() == uuid)
+        .map(|(index, entry)| (index, entry.clone()))
     else {
         error!("Could not find entry for {uuid}");
         return Response::builder()
@@ -53,7 +54,7 @@ pub async fn api_delete(
 
     debug!("Successfully deleted {uuid}");
 
-    cache.write().await.retain(|entry| entry.uuid() != uuid);
+    cache.write().await.remove(index);
 
     Response::builder().build()
 }
