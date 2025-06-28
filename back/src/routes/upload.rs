@@ -46,7 +46,6 @@ pub async fn api_upload(
             .build();
     }
 
-    // let data_stream = raw_data.open(unsafe{crate::FILE_REQ_SIZE_LIMIT});
     // File size check are done in the store data function in cache.rs
     let data_stream = raw_data.open(ByteUnit::max_value());
 
@@ -83,7 +82,7 @@ pub async fn api_upload(
 
 fn get_file_name(name: &str) -> Option<String> {
     if !name.contains(".") {
-        return None;
+        return Some(name.to_string());
     }
 
     let dot_index = name.rfind(".").unwrap();
