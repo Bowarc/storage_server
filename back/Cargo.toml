@@ -15,7 +15,6 @@ logger = { git = "https://github.com/Bowarc/Crates.git", package = "logger", fea
   "multithread",
   "panics",
 ] }
-random = { git = "https://github.com/Bowarc/Crates.git", package = "random" }
 time.workspace = true
 log = "0.4.20"
 regex = "1.10.2"
