@@ -1,10 +1,17 @@
+mod duplicates;
 mod entry;
 mod metadata;
+mod size;
 mod upload_info;
 
-pub use entry::*;
-pub use metadata::*;
-pub use upload_info::*;
+use std::str::FromStr as _;
+
+pub use duplicates::DuplicateMap;
+pub use entry::CacheEntry;
+pub use metadata::Metadata;
+use sha2::Digest;
+pub use size::Size;
+pub use upload_info::UploadInfo;
 
 #[cfg(not(test))]
 const CACHE_DIRECTORY: &str = "./cache";
@@ -16,14 +23,14 @@ pub type CacheEntryList = Vec<std::sync::Arc<CacheEntry>>;
 
 pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
     use std::sync::Arc;
+    use std::{fs::read_dir, path::PathBuf};
 
-    let files = std::fs::read_dir(CACHE_DIRECTORY)
+    let files = read_dir(CACHE_DIRECTORY)
         .map_err(|e| error!("Could not open cache dir due to: {e}"))
         .ok()?;
 
     // The default one is bad
-    let display_path =
-        |path: std::path::PathBuf| -> String { path.display().to_string().replace("\\", "/") };
+    let display_path = |path: PathBuf| -> String { path.display().to_string().replace("\\", "/") };
 
     let inner = files
         .flatten()
@@ -79,6 +86,8 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
         })
         .collect::<Vec<Arc<CacheEntry>>>();
 
+    debug!("Loaded {} cache entries", inner.len());
+
     Some(inner)
 }
 
@@ -90,11 +99,11 @@ fn meta_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
     p
 }
 
-fn data_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
+fn temp_data_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
     use std::{path::PathBuf, str::FromStr};
 
     let mut p = PathBuf::from_str(CACHE_DIRECTORY).unwrap();
-    p.push(format!("{}.data", uuid.as_hyphenated()));
+    p.push(format!("{}.temp_data", uuid.as_hyphenated()));
     p
 }
 
@@ -139,15 +148,18 @@ fn create_cache_files(
     Ok((meta_file, data_file))
 }
 
-async fn store_data_sync(
+// Returns the file size before compression
+async fn store_data(
     uuid: &uuid::Uuid,
-    entry: std::sync::Arc<CacheEntry>,
     mut original_data: rocket::data::DataStream<'_>,
     data_file: &mut std::fs::File,
-) -> Result<u64, crate::error::CacheError> {
+) -> Result<Size, crate::error::CacheError> {
     use {
-        crate::error::CacheError, rocket::data::ToByteUnit as _,
-        rocket::tokio::io::AsyncReadExt as _, std::io::Write as _, zstd::stream::Encoder,
+        crate::error::CacheError,
+        rocket::data::{ByteUnit, ToByteUnit as _},
+        rocket::tokio::io::AsyncReadExt as _,
+        std::io::Write as _,
+        zstd::stream::Encoder,
     };
 
     let mut encoder = Encoder::new(data_file, COMPRESSION_LEVEL).unwrap();
@@ -156,13 +168,11 @@ async fn store_data_sync(
     // (and i don't really know how async task works, so idk if thread local is usable here), we don't have much choice
     // The other way could be to make it on the stack, but if we do that, we would be very limited in size
     // since tokio's threads don't have a big stack size
-    // const BUFFER_SIZE: usize = 100_000; // 100kb
     const BUFFER_SIZE: usize = 500_000; // 500kb
     #[rustfmt::skip]
-    // const BUFFER_SIZE: usize = 5_000_000; // 5mb
-    // const BUFFER_SIZE: usize = 500_000_000; // 500mb
-    // const BUFFER_SIZE: usize = 5_000_000_000; // 5gb
     let mut buffer = vec![0; BUFFER_SIZE];
+
+    let byte_size_limit: ByteUnit = unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() };
 
     let mut total_read = 0;
     loop {
@@ -171,11 +181,12 @@ async fn store_data_sync(
         if read == 0 {
             break;
         }
+
         total_read += read;
 
         encoder.write_all(&buffer[..read]).unwrap();
 
-        if total_read > unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() } {
+        if total_read > byte_size_limit {
             error!("Max size reached");
             return Err(CacheError::FileSizeExceeded);
         }
@@ -193,25 +204,29 @@ async fn store_data_sync(
     let file_size = metadata.len();
 
     debug!(
-        "totals:\nRead: {}\nWrote: {}\nRemoved: {:.3}%",
+        "totals:\nRead: {}\nWrote: {}\nDelta: {}%",
         total_read,
         file_size,
-        100. - (file_size as f64 / total_read as f64) * 100.
+        {
+            let d = -(100. - (file_size as f64 / total_read as f64) * 100.);
+            if d > 0. {
+                format!("+{d:.3}")
+            } else {
+                format!("{d:.3}")
+            }
+        }
     );
 
-    entry.set_data_size(file_size);
-
-    Ok(total_read as u64)
+    // Ok(total_read as u64)
+    Ok(Size::new(total_read as u64, file_size))
 }
 
 async fn store_meta(
     uuid: &uuid::Uuid,
-    entry: std::sync::Arc<CacheEntry>,
+    metadata: Metadata,
     meta_file: &mut std::fs::File,
 ) -> Result<(), crate::error::CacheError> {
     use {crate::error::CacheError, rocket::serde::json::serde_json, std::io::Write as _};
-
-    let metadata = entry.build_metadata();
 
     let meta = serde_json::to_string_pretty(&metadata).map_err(|e| CacheError::Serialization {
         context: String::from("writing meta data"),
@@ -230,18 +245,111 @@ async fn store_meta(
     Ok(())
 }
 
+/// This function moves or remove the data file depending on if it already exists
+// Can't do it in store_data since we only have access to the original bytes
+// which is pre compression, so much more than if we read after
+fn handle_duplicates(
+    data_file_path: &mut std::path::PathBuf,
+    uuid: &uuid::Uuid,
+    duplicate_map: &std::sync::Arc<parking_lot::Mutex<DuplicateMap>>,
+) {
+    let (r, duration) = time::timeit(|| hash_file(data_file_path.clone()));
+    debug!("Hash: {:?} in {}", r, time::format(duration, -1));
+    let hash = r.unwrap();
+
+    // Quick and dirty way to avoid all possibilities of data races on file moves
+    static MUTEX: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+    let guard = loop {
+        match MUTEX.try_lock() {
+            Some(guard) => break guard,
+            None => std::thread::sleep(std::time::Duration::from_secs_f32(0.1)),
+        }
+    };
+
+    let is_duplicate = {
+        let mut duplicate_map_handle = duplicate_map.lock();
+
+        duplicate_map_handle.add(hash.clone(), *uuid);
+        duplicate_map_handle.get(&hash).unwrap().len() > 1
+    };
+
+    if is_duplicate {
+        std::fs::remove_file(data_file_path.clone()).unwrap();
+    } else {
+        let new_dp = {
+            let mut p = std::path::PathBuf::from_str(CACHE_DIRECTORY).unwrap();
+            p.push(hash.clone());
+            p
+        };
+        std::fs::rename(data_file_path.clone(), new_dp.clone()).unwrap();
+        *data_file_path = new_dp;
+    }
+
+    drop(guard);
+}
+
+fn hash_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<String> {
+    use sha2::Digest as _;
+    use std::io::Read as _;
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = sha2::Sha256::default();
+    let mut buffer = [0; 8192];
+
+    while let Ok(bytes_read) = file.read(&mut buffer) {
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
 async fn store(
-    entry: std::sync::Arc<CacheEntry>,
+    entry: &mut CacheEntry,
     original_data_stream: rocket::data::DataStream<'_>,
-) -> Result<u64, crate::error::CacheError> {
+    duplicate_map: std::sync::Arc<parking_lot::Mutex<DuplicateMap>>,
+) -> Result<Size, crate::error::CacheError> {
     use tokio::fs::remove_file;
 
     let uuid = entry.uuid();
 
-    let (mut meta_file, mut data_file) = create_cache_files(meta_path(&uuid), data_path(&uuid))?;
+    let meta_path = meta_path(&uuid);
+    let mut data_path = temp_data_path(&uuid);
 
-    async fn cleanup(uuid: &uuid::Uuid) {
-        match futures::join!(remove_file(meta_path(uuid)), remove_file(data_path(uuid))) {
+    let (mut meta_file, mut data_file) = create_cache_files(meta_path.clone(), data_path.clone())?;
+
+    let (data_store_result, data_store_duration) =
+        time::timeit_async(async || store_data(&uuid, original_data_stream, &mut data_file).await)
+            .await;
+
+    debug!("Data store took: {}", time::format(data_store_duration, -1));
+
+    let data_size = match data_store_result {
+        Ok(size) => size,
+        Err(e) => {
+            // We know that the files were created, so any error here are important
+            if let Err(e) = remove_file(data_path).await {
+                error!("[{uuid}] Failed to cleanup data file after error due to: {e}");
+            }
+            return Err(e);
+        }
+    };
+
+    entry.set_data_size(data_size);
+
+    handle_duplicates(&mut data_path, &uuid, &duplicate_map);
+
+    let metadata = Metadata::new(
+        entry.upload_info().name().to_string(),
+        entry.upload_info().extension().to_string(),
+        *entry.data_size(),
+        format!("{uuid}.data"),
+    );
+
+    if let Err(e) = store_meta(&uuid, metadata, &mut meta_file).await {
+        match futures::join!(remove_file(meta_path), remove_file(data_path)) {
             (Ok(_), Err(e)) | (Err(e), Ok(_)) => {
                 error!("[{uuid}] Failed to cleanup after error due to: {e}")
             }
@@ -250,24 +358,10 @@ async fn store(
             }
             _ => (),
         }
+        return Err(e);
     }
-
-    let original_data_length = match futures::join!(
-        store_data_sync(&uuid, entry.clone(), original_data_stream, &mut data_file),
-        store_meta(&uuid, entry.clone(), &mut meta_file)
-    ) {
-        (Ok(length), Ok(())) => length,
-        (Ok(_), Err(e)) | (Err(e), Ok(_)) => {
-            cleanup(&uuid).await;
-            return Err(e);
-        }
-        (Err(e1), Err(e2)) => {
-            cleanup(&uuid).await;
-            return Err(crate::error::CacheError::Multiple(vec![e1, e2]));
-        }
-    };
 
     entry.set_ready(true);
 
-    Ok(original_data_length)
+    Ok(data_size)
 }

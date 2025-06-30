@@ -14,6 +14,7 @@ pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    duplicate_map: &rocket::State<std::sync::Arc<parking_lot::Mutex<crate::cache::DuplicateMap>>>,
     addr: rocket_client_addr::ClientAddr,
 ) -> crate::response::Response {
     use {
@@ -49,15 +50,15 @@ pub async fn api_upload(
     // File size check are done in the store data function in cache.rs
     let data_stream = raw_data.open(ByteUnit::max_value());
 
-    let entry = Arc::new(CacheEntry::new(
+    let mut entry = CacheEntry::new(
         uuid,
         crate::cache::UploadInfo::new(
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
         ),
-    ));
+    );
 
-    if let Err(e) = entry.clone().store(data_stream).await {
+    if let Err(e) = entry.store(data_stream, std::sync::Arc::clone(duplicate_map)).await {
         error!("[{uuid}] An error occured while storing the given data: {e}");
         return Response::builder()
             .with_status(Status::InternalServerError)
@@ -66,7 +67,7 @@ pub async fn api_upload(
             .build();
     };
 
-    cache.write().await.push(entry);
+    cache.write().await.push(Arc::new(entry));
 
     info!(
         "[{uuid}] Responded in {}",
@@ -104,7 +105,10 @@ fn get_file_extension(name: &str) -> Option<String> {
 mod tests {
     use {
         crate::build_rocket,
-        rocket::{http::{Status, Header}, local::asynchronous::Client},
+        rocket::{
+            http::{Header, Status},
+            local::asynchronous::Client,
+        },
         std::str::FromStr,
     };
 
