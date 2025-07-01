@@ -115,8 +115,6 @@ dependencies = [
  "lazy_static",
  "log",
  "logger",
- "parking_lot",
- "random",
  "regex",
  "rocket",
  "rocket-client-addr",
@@ -1631,15 +1629,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
-]
-
-[[package]]
-name = "random"
-version = "0.1.0"
-source = "git+https://github.com/Bowarc/Crates.git#a0856f2670020eb07a267acb32804f8d1a3d46a0"
-dependencies = [
- "log",
- "rand",
 ]
 
 [[package]]

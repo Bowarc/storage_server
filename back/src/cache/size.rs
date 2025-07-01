@@ -11,10 +11,10 @@ impl Size {
             compressed,
         }
     }
-    pub fn original(&self) -> u64{
+    pub fn original(&self) -> u64 {
         self.original
     }
-    pub fn compressed(&self) -> u64{
+    pub fn compressed(&self) -> u64 {
         self.compressed
     }
 }

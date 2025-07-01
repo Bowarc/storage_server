@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 #[derive(Debug, serde::Serialize)]
 pub struct CacheEntry {
     uuid: uuid::Uuid,
@@ -36,6 +34,7 @@ impl CacheEntry {
             crate::error::CacheError,
             rocket::serde::json::serde_json,
             std::fs::{File, OpenOptions},
+            std::str::FromStr as _,
             uuid::Uuid,
         };
         let Some(uuid) = path
@@ -111,7 +110,7 @@ impl CacheEntry {
     pub async fn store(
         &mut self,
         data_stream: rocket::data::DataStream<'_>,
-        duplicate_map: std::sync::Arc<parking_lot::Mutex<super::DuplicateMap>>,
+        duplicate_map: std::sync::Arc<rocket::tokio::sync::Mutex<super::DuplicateMap>>,
     ) -> Result<(), crate::error::CacheError> {
         use rocket::data::ByteUnit;
 
@@ -154,7 +153,7 @@ impl CacheEntry {
             rocket::serde::json::serde_json::from_reader(meta_file).unwrap();
 
         let data_path = {
-            let mut p = std::path::PathBuf::from_str(super::CACHE_DIRECTORY).unwrap();
+            let mut p = super::CACHE_DIRECTORY.clone();
             p.push(metadata.data_file_name());
             p
         };
@@ -176,34 +175,83 @@ impl CacheEntry {
     }
 
     /// Delete a cache entry
-    pub async fn delete(self: std::sync::Arc<Self>) -> Result<(), crate::error::CacheError> {
-        todo!();
-        // use {crate::error::CacheError, tokio::fs::remove_file};
+    pub async fn delete(
+        self: std::sync::Arc<Self>,
 
-        // let meta_path = super::meta_path(&self.uuid);
+        duplicate_map: std::sync::Arc<rocket::tokio::sync::Mutex<super::DuplicateMap>>,
+    ) -> Result<(), crate::error::CacheError> {
+        use {
+            crate::error::CacheError,
+            tokio::{
+                fs::{remove_file, File, OpenOptions},
+                io::AsyncReadExt as _,
+            },
+        };
 
-        // let data_path = super::data_path(&self.uuid);
+        let meta_path = super::meta_path(&self.uuid);
+        let meta_path = meta_path;
 
-        // match futures::join!(remove_file(&meta_path), remove_file(&data_path),) {
-        //     (Ok(_), Ok(_)) => Ok(()),
-        //     (Ok(_), Err(e)) => Err(CacheError::FileRemove {
-        //         file: data_path.display().to_string(),
-        //         why: e,
-        //     }),
-        //     (Err(e), Ok(_)) => Err(CacheError::FileRemove {
-        //         file: meta_path.display().to_string(),
-        //         why: e,
-        //     }),
-        //     (Err(e1), Err(e2)) => Err(CacheError::Multiple(vec![
-        //         CacheError::FileWrite {
-        //             file: meta_path.display().to_string(),
-        //             why: e1,
-        //         },
-        //         CacheError::FileWrite {
-        //             file: data_path.display().to_string(),
-        //             why: e2,
-        //         },
-        //     ])),
-        // }
+        let mut meta_file = OpenOptions::new()
+            .read(true)
+            .open(&meta_path)
+            .await
+            .map_err(|e| CacheError::FileOpen {
+                file: meta_path.display().to_string(),
+                why: e,
+            })?;
+
+        let mut buffer = Vec::<u8>::new();
+
+        meta_file.read_to_end(&mut buffer).await.unwrap();
+
+        let metadata =
+            rocket::serde::json::serde_json::from_slice::<super::Metadata>(&buffer).unwrap();
+
+        let mut duplicate_map_guard = duplicate_map.lock().await;
+
+        let hashes = duplicate_map_guard.remove(&self.uuid).unwrap();
+
+        if hashes.len() != 1 {
+            return Err(CacheError::DuplicateMapLogic(
+                format!("There was an issue with the deletion of [{}]: the dup map returned {} matches ({:?}) for uuid:{}", self.uuid, hashes.len(), hashes, self.uuid)
+            ));
+        }
+
+        let data_hash = hashes.first().unwrap();
+
+        // Meaning that the current uuid was NOT the last holder of that data hash
+        if duplicate_map_guard.get(data_hash).is_some() {
+            // Just remove the meta file, and leave
+            remove_file(meta_path).await.unwrap();
+            return Ok(());
+        }
+
+        let data_path = {
+            let mut p = super::CACHE_DIRECTORY.clone();
+            p.push(metadata.data_file_name());
+            p
+        };
+
+        match futures::join!(remove_file(&meta_path), remove_file(&data_path)) {
+            (Ok(_), Ok(_)) => Ok(()),
+            (Ok(_), Err(e)) => Err(CacheError::FileRemove {
+                file: data_path.display().to_string(),
+                why: e,
+            }),
+            (Err(e), Ok(_)) => Err(CacheError::FileRemove {
+                file: meta_path.display().to_string(),
+                why: e,
+            }),
+            (Err(e1), Err(e2)) => Err(CacheError::Multiple(vec![
+                CacheError::FileWrite {
+                    file: meta_path.display().to_string(),
+                    why: e1,
+                },
+                CacheError::FileWrite {
+                    file: data_path.display().to_string(),
+                    why: e2,
+                },
+            ])),
+        }
     }
 }

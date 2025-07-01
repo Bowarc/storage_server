@@ -1,7 +1,5 @@
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
-    // #[error("Test error")]
-    // Test,
     #[error("Could not create file '{file}' due to: {why}")]
     FileCreate { file: String, why: std::io::Error },
 
@@ -51,7 +49,10 @@ pub enum CacheError {
     WrongFileType { expected: String, actual: String },
 
     #[error("Multiple errors occured: {0:?}")]
-    Multiple(Vec<Self>)
+    Multiple(Vec<Self>),
+
+    #[error("There has been an issue with the duplicate map: {0}")]
+    DuplicateMapLogic(String),
 }
 
 #[derive(Debug, thiserror::Error)]

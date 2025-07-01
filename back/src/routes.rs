@@ -1,20 +1,20 @@
-#[path = "routes/download.rs"]
-mod download_route;
 #[path = "routes/delete.rs"]
 mod delete_route;
+#[path = "routes/download.rs"]
+mod download_route;
 #[path = "routes/info.rs"]
 mod info_route;
 #[path = "routes/upload.rs"] // Naming conflict in main when registering route
 mod upload_route;
 
 #[allow(unused_imports)] // Used by main.rs
+pub use delete_route::*;
+#[allow(unused_imports)] // Used by main.rs
 pub use download_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use info_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;
-#[allow(unused_imports)] // Used by main.rs
-pub use delete_route::*;
 
 // Here are routes that are managed by the front end router, so just serve the page and let it do it's things
 macro_rules! front_route {

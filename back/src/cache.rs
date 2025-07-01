@@ -4,28 +4,35 @@ mod metadata;
 mod size;
 mod upload_info;
 
-use std::str::FromStr as _;
-
 pub use duplicates::DuplicateMap;
 pub use entry::CacheEntry;
 pub use metadata::Metadata;
-use sha2::Digest;
 pub use size::Size;
 pub use upload_info::UploadInfo;
 
+// const CACHE_DIRECTORY: &std::path::PathBuf = "./cache";
 #[cfg(not(test))]
-const CACHE_DIRECTORY: &str = "./cache";
+lazy_static! {
+    static ref CACHE_DIRECTORY: std::path::PathBuf =
+        std::str::FromStr::from_str("./cache").unwrap();
+}
 #[cfg(test)]
-const CACHE_DIRECTORY: &str = "../cache"; // For some reason, tests launch path is ./back
+lazy_static! {
+    static ref CACHE_DIRECTORY: std::path::PathBuf =
+        std::str::FromStr::from_str("../cache").unwrap();
+}
+
 const COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL; // 3, 1..=22 (zstd)
 
 pub type CacheEntryList = Vec<std::sync::Arc<CacheEntry>>;
 
 pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
-    use std::sync::Arc;
-    use std::{fs::read_dir, path::PathBuf};
+    use {
+        std::{fs::read_dir, path::PathBuf, str::FromStr as _, sync::Arc},
+        uuid::Uuid,
+    };
 
-    let files = read_dir(CACHE_DIRECTORY)
+    let files = read_dir(CACHE_DIRECTORY.clone())
         .map_err(|e| error!("Could not open cache dir due to: {e}"))
         .ok()?;
 
@@ -35,8 +42,6 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
     let inner = files
         .flatten()
         .flat_map(|entry| {
-            use std::str::FromStr as _;
-
             let metadata = entry
                 .metadata()
                 .map_err(|e| {
@@ -58,7 +63,7 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
             let Some(id) = path
                 .file_stem()
                 .and_then(|stem| stem.to_str())
-                .and_then(|s| uuid::Uuid::from_str(s).ok())
+                .and_then(|s| Uuid::from_str(s).ok())
             else {
                 warn!(
                     "Could not extract id from cache file '{}'",
@@ -92,17 +97,13 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
 }
 
 fn meta_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
-    use std::{path::PathBuf, str::FromStr};
-
-    let mut p = PathBuf::from_str(CACHE_DIRECTORY).unwrap();
+    let mut p = CACHE_DIRECTORY.clone();
     p.push(format!("{}.meta", uuid.as_hyphenated()));
     p
 }
 
 fn temp_data_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
-    use std::{path::PathBuf, str::FromStr};
-
-    let mut p = PathBuf::from_str(CACHE_DIRECTORY).unwrap();
+    let mut p = CACHE_DIRECTORY.clone();
     p.push(format!("{}.temp_data", uuid.as_hyphenated()));
     p
 }
@@ -228,7 +229,7 @@ async fn store_meta(
 ) -> Result<(), crate::error::CacheError> {
     use {crate::error::CacheError, rocket::serde::json::serde_json, std::io::Write as _};
 
-    let meta = serde_json::to_string_pretty(&metadata).map_err(|e| CacheError::Serialization {
+    let meta = serde_json::to_string(&metadata).map_err(|e| CacheError::Serialization {
         context: String::from("writing meta data"),
         why: e,
     })?;
@@ -248,55 +249,64 @@ async fn store_meta(
 /// This function moves or remove the data file depending on if it already exists
 // Can't do it in store_data since we only have access to the original bytes
 // which is pre compression, so much more than if we read after
-fn handle_duplicates(
+async fn handle_duplicates(
     data_file_path: &mut std::path::PathBuf,
     uuid: &uuid::Uuid,
-    duplicate_map: &std::sync::Arc<parking_lot::Mutex<DuplicateMap>>,
+    duplicate_map: &std::sync::Arc<rocket::tokio::sync::Mutex<DuplicateMap>>,
 ) {
-    let (r, duration) = time::timeit(|| hash_file(data_file_path.clone()));
+    use {
+        rocket::tokio::{
+            fs::{remove_file, rename},
+            sync::Mutex,
+        },
+        std::sync::LazyLock,
+    };
+    let (r, duration) = time::timeit_async(async || hash_file(data_file_path.clone()).await).await;
     debug!("Hash: {:?} in {}", r, time::format(duration, -1));
     let hash = r.unwrap();
 
     // Quick and dirty way to avoid all possibilities of data races on file moves
-    static MUTEX: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+    static MUTEX: LazyLock<Mutex<()>> = LazyLock::new(Mutex::default);
 
-    let guard = loop {
-        match MUTEX.try_lock() {
-            Some(guard) => break guard,
-            None => std::thread::sleep(std::time::Duration::from_secs_f32(0.1)),
-        }
-    };
+    let guard = MUTEX.lock().await;
 
     let is_duplicate = {
-        let mut duplicate_map_handle = duplicate_map.lock();
+        let mut duplicate_map_handle = duplicate_map.lock().await;
 
-        duplicate_map_handle.add(hash.clone(), *uuid);
+        duplicate_map_handle.add(hash.clone(), *uuid).unwrap();
         duplicate_map_handle.get(&hash).unwrap().len() > 1
     };
 
+    let new_dp = {
+        let mut p = CACHE_DIRECTORY.clone();
+        p.push(hash.clone());
+        p
+    };
+
     if is_duplicate {
-        std::fs::remove_file(data_file_path.clone()).unwrap();
+        remove_file(data_file_path.clone()).await.unwrap();
     } else {
-        let new_dp = {
-            let mut p = std::path::PathBuf::from_str(CACHE_DIRECTORY).unwrap();
-            p.push(hash.clone());
-            p
-        };
-        std::fs::rename(data_file_path.clone(), new_dp.clone()).unwrap();
-        *data_file_path = new_dp;
+        rename(data_file_path.clone(), new_dp.clone())
+            .await
+            .unwrap();
     }
+
+    *data_file_path = new_dp;
 
     drop(guard);
 }
 
-fn hash_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<String> {
-    use sha2::Digest as _;
-    use std::io::Read as _;
-    let mut file = std::fs::File::open(path)?;
-    let mut hasher = sha2::Sha256::default();
+async fn hash_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<String> {
+    use {
+        rocket::tokio::{fs::File, io::AsyncReadExt as _},
+        sha2::{Digest as _, Sha256},
+    };
+
+    let mut file = File::open(path).await?;
+    let mut hasher = Sha256::default();
     let mut buffer = [0; 8192];
 
-    while let Ok(bytes_read) = file.read(&mut buffer) {
+    while let Ok(bytes_read) = file.read(&mut buffer).await {
         if bytes_read == 0 {
             break;
         }
@@ -309,7 +319,7 @@ fn hash_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<String> {
 async fn store(
     entry: &mut CacheEntry,
     original_data_stream: rocket::data::DataStream<'_>,
-    duplicate_map: std::sync::Arc<parking_lot::Mutex<DuplicateMap>>,
+    duplicate_map: std::sync::Arc<rocket::tokio::sync::Mutex<DuplicateMap>>,
 ) -> Result<Size, crate::error::CacheError> {
     use tokio::fs::remove_file;
 
@@ -339,13 +349,17 @@ async fn store(
 
     entry.set_data_size(data_size);
 
-    handle_duplicates(&mut data_path, &uuid, &duplicate_map);
+    handle_duplicates(&mut data_path, &uuid, &duplicate_map).await;
 
     let metadata = Metadata::new(
         entry.upload_info().name().to_string(),
         entry.upload_info().extension().to_string(),
         *entry.data_size(),
-        format!("{uuid}.data"),
+        data_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("{uuid}.data")),
     );
 
     if let Err(e) = store_meta(&uuid, metadata, &mut meta_file).await {

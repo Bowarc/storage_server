@@ -28,7 +28,7 @@ impl Metadata {
         &self.size
     }
 
-    pub fn data_file_name(&self) -> &String{
+    pub fn data_file_name(&self) -> &String {
         &self.data_file_name
     }
 }

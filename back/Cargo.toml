@@ -30,4 +30,3 @@ tokio-util = { version = "0.7.13", default-features = false, features = [
   "compat",
 ] }
 sha2 = "0.10.9"
-parking_lot = "0.12.4"

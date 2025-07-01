@@ -14,7 +14,9 @@ pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
-    duplicate_map: &rocket::State<std::sync::Arc<parking_lot::Mutex<crate::cache::DuplicateMap>>>,
+    duplicate_map: &rocket::State<
+        std::sync::Arc<rocket::tokio::sync::Mutex<crate::cache::DuplicateMap>>,
+    >,
     addr: rocket_client_addr::ClientAddr,
 ) -> crate::response::Response {
     use {
@@ -58,7 +60,10 @@ pub async fn api_upload(
         ),
     );
 
-    if let Err(e) = entry.store(data_stream, std::sync::Arc::clone(duplicate_map)).await {
+    if let Err(e) = entry
+        .store(data_stream, std::sync::Arc::clone(duplicate_map))
+        .await
+    {
         error!("[{uuid}] An error occured while storing the given data: {e}");
         return Response::builder()
             .with_status(Status::InternalServerError)

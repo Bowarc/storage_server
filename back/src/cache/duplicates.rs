@@ -1,5 +1,4 @@
 // While this map doesn't help in reducing storage time, it helps with taking less space on disk
-
 type Hash = String;
 
 #[derive(Debug, Default)]
@@ -12,7 +11,7 @@ impl DuplicateMap {
         use rocket::serde::json::serde_json::from_reader;
         use std::fs::{read_dir, OpenOptions};
 
-        let Ok(files) = read_dir(super::CACHE_DIRECTORY)
+        let Ok(files) = read_dir(super::CACHE_DIRECTORY.clone())
             .map_err(|e| error!("Could not open cache dir due to: {e}"))
         else {
             return Default::default();
@@ -38,7 +37,11 @@ impl DuplicateMap {
             std::{fs::OpenOptions, io::Write as _},
         };
 
-        let path = format!("{}/duplicates.json", super::CACHE_DIRECTORY);
+        let path = {
+            let mut p = super::CACHE_DIRECTORY.clone();
+            p.push("duplicates.json");
+            p
+        };
 
         let mut file = OpenOptions::new()
             .write(true)
@@ -46,7 +49,7 @@ impl DuplicateMap {
             .create(true)
             .open(path.clone())
             .map_err(|e| CacheError::FileOpen {
-                file: path.clone(),
+                file: path.display().to_string(),
                 why: e,
             })?;
 
@@ -56,7 +59,10 @@ impl DuplicateMap {
         })?;
 
         file.write_all(json.as_bytes())
-            .map_err(|e| CacheError::FileWrite { file: path, why: e })?;
+            .map_err(|e| CacheError::FileWrite {
+                file: path.display().to_string(),
+                why: e,
+            })?;
 
         Ok(())
     }
@@ -64,15 +70,24 @@ impl DuplicateMap {
     pub fn get(&self, hash: &Hash) -> Option<&[uuid::Uuid]> {
         self.inner.get(hash).map(|v| v.as_slice())
     }
-    pub fn add(&mut self, hash: Hash, uuid: uuid::Uuid) {
+    pub fn add(&mut self, hash: Hash, uuid: uuid::Uuid) -> Result<(), crate::error::CacheError> {
         self.inner.entry(hash).or_default().push(uuid);
-        self.write_to_file().unwrap()
+        self.write_to_file()
     }
-    pub fn remove(&mut self, uuid: &uuid::Uuid) {
+    pub fn remove(&mut self, uuid: &uuid::Uuid) -> Result<Vec<String>, crate::error::CacheError> {
+        // Smallvec ? https://docs.rs/smallvec
         let mut keys_to_remove = Vec::new();
+        let mut out = Vec::new();
 
         for (key, vec) in self.inner.iter_mut() {
+            let base_len = vec.len();
             vec.retain(|u| u != uuid);
+
+            if base_len == vec.len() {
+                continue;
+            }
+
+            out.push(key.clone());
 
             if vec.is_empty() {
                 keys_to_remove.push(key.clone());
@@ -83,6 +98,6 @@ impl DuplicateMap {
             self.inner.remove(&key);
         }
 
-        self.write_to_file().unwrap()
+        self.write_to_file().map(|_| out)
     }
 }
