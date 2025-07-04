@@ -3,15 +3,17 @@
 pub struct Metadata {
     name: String,
     extension: String,
-    size: u64,
+    size: super::Size,
+    data_file_name: String,
 }
 
 impl Metadata {
-    pub fn new(name: String, extension: String, size: u64) -> Self {
+    pub fn new(name: String, extension: String, size: super::Size, data_file_name: String) -> Self {
         Self {
             name,
             extension,
             size,
+            data_file_name,
         }
     }
 
@@ -22,7 +24,11 @@ impl Metadata {
         &self.extension
     }
 
-    pub fn size(&self) -> &u64 {
+    pub fn size(&self) -> &super::Size {
         &self.size
+    }
+
+    pub fn data_file_name(&self) -> &String {
+        &self.data_file_name
     }
 }

@@ -8,6 +8,9 @@
 pub async fn api_delete(
     uuidw: Option<super::UuidWrapper>,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    duplicate_map: &rocket::State<
+        std::sync::Arc<rocket::tokio::sync::Mutex<crate::cache::DuplicateMap>>,
+    >,
 
     // See route::download's comment
     addr: rocket_client_addr::ClientAddr,
@@ -44,7 +47,7 @@ pub async fn api_delete(
             .build();
     };
 
-    if let Err(e) = entry.delete().await {
+    if let Err(e) = entry.delete(std::sync::Arc::clone(duplicate_map)).await {
         error!("Failed to delete {uuid} due to: {e}");
 
         return Response::builder()
