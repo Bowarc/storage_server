@@ -14,6 +14,9 @@ pub enum CacheError {
 
     #[error("Could not remove to file '{file}' due to: {why}")]
     FileRemove { file: String, why: std::io::Error },
+    
+    #[error("Could not rename to file '{file}' due to: {why}")]
+    FileRename { file: String, why: std::io::Error },
 
     #[error("Given file was too large, max size is: {}", unsafe{crate::FILE_REQ_SIZE_LIMIT})]
     FileSizeExceeded,

@@ -163,7 +163,8 @@ async fn store_data(
         zstd::stream::Encoder,
     };
 
-    let mut encoder = Encoder::new(data_file, COMPRESSION_LEVEL).unwrap();
+    let mut encoder = Encoder::new(data_file, COMPRESSION_LEVEL)
+        .map_err(|e| CacheError::Compression { why: e })?;
 
     // I am not too happy with that allocation, but since we're in an async context
     // (and i don't really know how async task works, so idk if thread local is usable here), we don't have much choice
@@ -177,7 +178,10 @@ async fn store_data(
 
     let mut total_read = 0;
     loop {
-        let read = original_data.read(&mut buffer).await.unwrap();
+        let read = original_data
+            .read(&mut buffer)
+            .await
+            .map_err(|e| CacheError::Compression { why: e })?;
 
         if read == 0 {
             break;
@@ -185,7 +189,9 @@ async fn store_data(
 
         total_read += read;
 
-        encoder.write_all(&buffer[..read]).unwrap();
+        encoder
+            .write_all(&buffer[..read])
+            .map_err(|e| CacheError::Compression { why: e })?;
 
         if total_read > byte_size_limit {
             error!("Max size reached");
@@ -253,8 +259,9 @@ async fn handle_duplicates(
     data_file_path: &mut std::path::PathBuf,
     uuid: &uuid::Uuid,
     duplicate_map: &std::sync::Arc<rocket::tokio::sync::Mutex<DuplicateMap>>,
-) {
+) -> Result<(), crate::error::CacheError> {
     use {
+        crate::error::CacheError,
         rocket::tokio::{
             fs::{remove_file, rename},
             sync::Mutex,
@@ -263,7 +270,7 @@ async fn handle_duplicates(
     };
     let (r, duration) = time::timeit_async(async || hash_file(data_file_path.clone()).await).await;
     debug!("Hash: {:?} in {}", r, time::format(duration, -1));
-    let hash = r.unwrap();
+    let hash = r?;
 
     // Quick and dirty way to avoid all possibilities of data races on file moves
     static MUTEX: LazyLock<Mutex<()>> = LazyLock::new(Mutex::default);
@@ -273,8 +280,19 @@ async fn handle_duplicates(
     let is_duplicate = {
         let mut duplicate_map_handle = duplicate_map.lock().await;
 
-        duplicate_map_handle.add(hash.clone(), *uuid).unwrap();
-        duplicate_map_handle.get(&hash).unwrap().len() > 1
+        duplicate_map_handle.add(hash.clone(), *uuid)?;
+
+        // Get corresponding uuid list from hash
+        let is_dup = duplicate_map_handle
+            .get(&hash)
+            .map(|uuid_list| uuid_list.len() > 1);
+
+        // The hash should be registered since the minimum element list would be the current download
+        if is_dup.is_none() {
+            duplicate_map_handle.add(hash.clone(), *uuid)?
+        }
+        
+        is_dup.unwrap_or(false)
     };
 
     let new_dp = {
@@ -284,25 +302,42 @@ async fn handle_duplicates(
     };
 
     if is_duplicate {
-        remove_file(data_file_path.clone()).await.unwrap();
+        remove_file(data_file_path.clone())
+            .await
+            .map_err(|e| CacheError::FileRemove {
+                file: data_file_path.display().to_string(),
+                why: e,
+            })?;
     } else {
         rename(data_file_path.clone(), new_dp.clone())
             .await
-            .unwrap();
+            .map_err(|e| CacheError::FileRename {
+                file: data_file_path.display().to_string(),
+                why: e,
+            })?;
     }
 
     *data_file_path = new_dp;
 
     drop(guard);
+
+    Ok(())
 }
 
-async fn hash_file<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<String> {
+async fn hash_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, crate::error::CacheError> {
     use {
+        crate::error::CacheError,
         rocket::tokio::{fs::File, io::AsyncReadExt as _},
         sha2::{Digest as _, Sha256},
     };
 
-    let mut file = File::open(path).await?;
+    let path = path.as_ref();
+
+    let mut file = File::open(path).await.map_err(|e| CacheError::FileOpen {
+        file: path.display().to_string(),
+        why: e,
+    })?;
+
     let mut hasher = Sha256::default();
     let mut buffer = [0; 8192];
 

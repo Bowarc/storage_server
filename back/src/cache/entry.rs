@@ -145,12 +145,20 @@ impl CacheEntry {
             return Err(CacheError::NotReady { uuid });
         }
 
+        let meta_path = super::meta_path(&uuid);
         let meta_file = std::fs::OpenOptions::new()
             .read(true)
-            .open(super::meta_path(&uuid))
-            .unwrap();
-        let metadata: super::Metadata =
-            rocket::serde::json::serde_json::from_reader(meta_file).unwrap();
+            .open(&meta_path)
+            .map_err(|e| CacheError::FileOpen {
+                file: meta_path.display().to_string(),
+                why: e,
+            })?;
+
+        let metadata: super::Metadata = rocket::serde::json::serde_json::from_reader(meta_file)
+            .map_err(|e| CacheError::Deserialization {
+                file: meta_path.display().to_string(),
+                why: e,
+            })?;
 
         let data_path = {
             let mut p = super::CACHE_DIRECTORY.clone();
@@ -189,7 +197,6 @@ impl CacheEntry {
         };
 
         let meta_path = super::meta_path(&self.uuid);
-        let meta_path = meta_path;
 
         let mut meta_file = OpenOptions::new()
             .read(true)
@@ -202,14 +209,23 @@ impl CacheEntry {
 
         let mut buffer = Vec::<u8>::new();
 
-        meta_file.read_to_end(&mut buffer).await.unwrap();
+        meta_file
+            .read_to_end(&mut buffer)
+            .await
+            .map_err(|e| CacheError::FileRead {
+                file: meta_path.display().to_string(),
+                why: e,
+            })?;
 
-        let metadata =
-            rocket::serde::json::serde_json::from_slice::<super::Metadata>(&buffer).unwrap();
+        let metadata = rocket::serde::json::serde_json::from_slice::<super::Metadata>(&buffer)
+            .map_err(|e| CacheError::Deserialization {
+                file: meta_path.display().to_string(),
+                why: e,
+            })?;
 
         let mut duplicate_map_guard = duplicate_map.lock().await;
 
-        let hashes = duplicate_map_guard.remove(&self.uuid).unwrap();
+        let hashes = duplicate_map_guard.remove(&self.uuid)?;
 
         if hashes.len() != 1 {
             return Err(CacheError::DuplicateMapLogic(
@@ -217,12 +233,18 @@ impl CacheEntry {
             ));
         }
 
-        let data_hash = hashes.first().unwrap();
+        let data_hash = hashes.first().unwrap(); // Cannot fail
 
         // Meaning that the current uuid was NOT the last holder of that data hash
         if duplicate_map_guard.get(data_hash).is_some() {
             // Just remove the meta file, and leave
-            remove_file(meta_path).await.unwrap();
+            remove_file(&meta_path)
+                .await
+                .map_err(|e| CacheError::FileRemove {
+                    file: meta_path.display().to_string(),
+                    why: e,
+                })?;
+
             return Ok(());
         }
 
