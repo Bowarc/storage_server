@@ -18,7 +18,7 @@ cli_colors = false
 [default.limits]
 bytes = "0 B"
 data-form = "0 B"
-file = "1 GiB"
+file = "5 GiB"
 form = "0 B"
 msgpack = "0 B"
 string = "0 B"

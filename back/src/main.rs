@@ -22,8 +22,13 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
         std::process::exit(1)
     };
 
+    let duplicate_map = cache::DuplicateMap::init_from_cache_dir();
+
     let rocket = rocket::build()
         .manage(rocket::tokio::sync::RwLock::new(cache))
+        .manage(std::sync::Arc::new(rocket::tokio::sync::Mutex::new(
+            duplicate_map,
+        )))
         .register(
             "/",
             rocket::catchers![catchers::root_403, catchers::root_404],
