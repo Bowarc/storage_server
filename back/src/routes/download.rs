@@ -142,11 +142,21 @@ pub async fn api_download(
         .with_content_type(ContentType::Binary)
         .with_header(
             "Content-Disposition",
-            &format!(
-                "attachment; filename=\"{}.{}\"",
-                meta.name(),
-                meta.extension()
-            ),
+            // This would add a '.' at the end of a file name if it had no extension.
+            // ie: An uploaded file named 'Hellow' would be sent back as 'Hellow.'
+            // Caught by unit tests, but damn what a dumb mistake
+            &if meta.extension().is_empty() {
+                format!(
+                    "attachment; filename=\"{}\"",
+                    meta.name(),
+                )
+            } else {
+                format!(
+                    "attachment; filename=\"{}.{}\"",
+                    meta.name(),
+                    meta.extension()
+                )
+            },
         )
         .build()
 }
@@ -241,65 +251,17 @@ mod tests {
     #[rocket::async_test]
     async fn test_download() {
         use rocket::http::Header;
-        let base_filename = "test.file";
-
-        let uuid = {
-            // Setup
-            let client = Client::tracked(build_rocket().await)
-                .await
-                .expect("valid rocket instance");
-
-            let response = client
-                .put(format!("/{base_filename}"))
-                .header(rocket::http::ContentType::Text)
-                .header(Header::new("x-forwarded-for", "0.0.0.0"))
-                .body("This is a cool file content")
-                .dispatch()
-                .await;
-
-            #[allow(deprecated)] // stfu ik
-            std::thread::sleep_ms(500);
-
-            assert_eq!(response.status(), Status::Created);
-
-            let rs = response.into_string().await.unwrap();
-
-            info!("{}", rs);
-
-            let suuid = rs.replace("Success: ", "");
-            uuid::Uuid::from_str(&suuid).unwrap()
-        };
+        let base_filename = "eh";
 
         let client = Client::tracked(build_rocket().await)
             .await
             .expect("valid rocket instance");
 
-        let response = client
-            .get(format!("/{uuid}", uuid = uuid.hyphenated()))
-            .header(Header::new("x-forwarded-for", "0.0.0.0"))
-            .dispatch()
-            .await;
-
-        assert_eq!(response.status(), Status::Ok);
-        assert_eq!(
-            response.headers().get_one("Content-Disposition").unwrap(),
-            format!("attachment; filename=\"{base_filename}\"")
-        );
-    }
-
-    #[rocket::async_test]
-    async fn test_download_filename() {
-        use rocket::http::Header;
-        let base_filename = "test.file";
-
         let uuid = {
             // Setup
-            let client = Client::tracked(build_rocket().await)
-                .await
-                .expect("valid rocket instance");
             let response = client
                 .put(format!("/{base_filename}"))
-                .body("This is a co")
+                .body("This is a test file")
                 .header(Header::new("x-forwarded-for", "0.0.0.0"))
                 .dispatch()
                 .await;
@@ -317,9 +279,49 @@ mod tests {
             uuid::Uuid::from_str(&suuid).unwrap()
         };
 
+        let response = client
+            .get(format!("/{uuid}/", uuid = uuid.hyphenated()))
+            .header(Header::new("x-forwarded-for", "0.0.0.0"))
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(
+            response.headers().get_one("Content-Disposition").unwrap(),
+            format!("attachment; filename=\"{base_filename}\"")
+        );
+    }
+
+    #[rocket::async_test]
+    async fn test_download_filename() {
+        use rocket::http::Header;
+        let base_filename = "test.file";
+
         let client = Client::tracked(build_rocket().await)
             .await
             .expect("valid rocket instance");
+
+        let uuid = {
+            // Setup
+            let response = client
+                .put(format!("/{base_filename}"))
+                .body("This is a test file")
+                .header(Header::new("x-forwarded-for", "0.0.0.0"))
+                .dispatch()
+                .await;
+
+            #[allow(deprecated)] // stfu ik
+            std::thread::sleep_ms(500);
+
+            assert_eq!(response.status(), Status::Created);
+            let suuid = response
+                .into_string()
+                .await
+                .unwrap()
+                .replace("Success: ", "");
+
+            uuid::Uuid::from_str(&suuid).unwrap()
+        };
 
         let response = client
             .get(format!("/{uuid}/{base_filename}", uuid = uuid.hyphenated()))

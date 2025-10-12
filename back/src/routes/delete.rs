@@ -74,12 +74,12 @@ mod tests {
     async fn test_delete() {
         use rocket::http::Header;
         let base_filename = "test.file";
+        let client = Client::tracked(build_rocket().await)
+            .await
+            .expect("valid rocket instance");
 
         let uuid = {
             // Setup
-            let client = Client::tracked(build_rocket().await)
-                .await
-                .expect("valid rocket instance");
 
             let response = client
                 .put(format!("/{base_filename}"))
@@ -101,10 +101,6 @@ mod tests {
             let suuid = rs.replace("Success: ", "");
             uuid::Uuid::from_str(&suuid).unwrap()
         };
-
-        let client = Client::tracked(build_rocket().await)
-            .await
-            .expect("valid rocket instance");
 
         let response = client
             .delete(format!("/{uuid}", uuid = uuid.hyphenated()))
