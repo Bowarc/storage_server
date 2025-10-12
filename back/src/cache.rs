@@ -1,3 +1,18 @@
+/*
+    Fs: 3 file types
+    - Data files:
+        Name is a uuid with no extension
+        Raw content of a file, compressed using zstd with COMPRESSION_LEVEL level
+    - Meta files:
+        The name is a uuid (not related to the data file) with .meta at the end
+        Stores data about an uploaded file.
+        One meta file per upload but multiple meta file can point to the same data file if content are duplicates
+        File structure is metadata::Metadata
+    - Duplicate file:
+        On disk duplicate tracking storage.
+        A serialized version of the duplicates::DuplicateMap struct.
+*/
+
 mod duplicates;
 mod entry;
 mod metadata;
