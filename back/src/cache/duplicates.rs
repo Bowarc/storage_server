@@ -11,19 +11,16 @@ impl DuplicateMap {
         use rocket::serde::json::serde_json::from_reader;
         use std::fs::{read_dir, OpenOptions};
 
-        let Ok(files) = read_dir(super::fs::duplicates_path()).map_err(|e| {
-            error!("Failed to load duplicate map from fs due to: {e}\nFalling back to default")
-        }) else {
-            return Default::default();
-        };
-
-        let Some(map_file) = files
-            .flatten()
-            .find(|f| f.file_name() == "duplicates.json")
-            .and_then(|dir_entry| OpenOptions::new().read(true).open(dir_entry.path()).ok())
+        let Ok(map_file) = OpenOptions::new()
+            .read(true)
+            .open(super::fs::duplicates_path())
+            .map_err(|e| {
+                error!("Failed to load duplicate map from fs due to: {e}\nFalling back to default")
+            })
         else {
             return Default::default();
         };
+
 
         let map = from_reader(map_file).unwrap_or_default();
 
