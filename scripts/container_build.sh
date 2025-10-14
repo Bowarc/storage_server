@@ -3,4 +3,4 @@
 set -e
 
 echo Building image
-docker build -t storage_server:latest .
+podman build -t storage_server:latest .

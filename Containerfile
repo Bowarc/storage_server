@@ -4,10 +4,10 @@
 FROM rust:1.85 AS base
 
 RUN rustup target add wasm32-unknown-unknown
-RUN cargo install --locked wasm-bindgen-cli
+RUN cargo install --locked wasm-bindgen-cli --version 0.2.100
 # RUN cargo install sccache
-RUN cargo install cargo-chef
-RUN cargo install minhtml # https://github.com/wilsonzlin/minify-html
+RUN cargo install --git https://github.com/bowarc/cargo-chef
+RUN cargo install --git https://github.com/wilsonzlin/minify-html minhtml --rev 2301223773dadce30a33b4c407d8b2524adeb5e2
 
 ##########
 # PANNER #
