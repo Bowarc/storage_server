@@ -14,3 +14,4 @@ opt-level = 3
 time = { git = "https://github.com/Bowarc/Crates.git", package = "time" }
 serde = { version = "1.0.194", features = ["derive"] }
 uuid = { version = "1.6.1", features = ["v4", "zerocopy", "serde"] }
+futures = "0.3.30"
