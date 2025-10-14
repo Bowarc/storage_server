@@ -8,8 +8,7 @@ pub struct DuplicateMap {
 
 impl DuplicateMap {
     pub fn init_from_cache_dir() -> Self {
-        use rocket::serde::json::serde_json::from_reader;
-        use std::fs::{read_dir, OpenOptions};
+        use {rocket::serde::json::serde_json, std::fs::OpenOptions};
 
         let Ok(map_file) = OpenOptions::new()
             .read(true)
@@ -21,8 +20,7 @@ impl DuplicateMap {
             return Default::default();
         };
 
-
-        let map = from_reader(map_file).unwrap_or_default();
+        let map = serde_json::from_reader(map_file).unwrap_or_default();
 
         Self { inner: map }
     }
@@ -67,6 +65,9 @@ impl DuplicateMap {
         self.inner.entry(hash).or_default().push(uuid);
         self.write_to_file()
     }
+
+    // Removes and return every hash(key) that this uuid(value) is associated to
+    // (Should be one at max)
     pub fn remove(&mut self, uuid: &uuid::Uuid) -> Result<Vec<String>, crate::error::CacheError> {
         // Smallvec ? https://docs.rs/smallvec
         let mut keys_to_remove = Vec::new();
@@ -98,6 +99,7 @@ impl DuplicateMap {
 /// This function moves or remove the data file depending on if it already exists
 // Can't do it in store_data since we only have access to the original bytes
 // which is pre compression, so much more than if we read after
+// FIXME: This is dirty and REALLY ugly
 pub async fn handle_duplicates(
     data_file_path: &mut std::path::PathBuf,
     uuid: &uuid::Uuid,

@@ -48,7 +48,7 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
                 .metadata()
                 .map_err(|e| {
                     error!(
-                        "Could not read metadata from cache file '{p}' due to: {e}",
+                        "Could not read metadata from cache item '{p}' due to: {e}",
                         p = display_path(entry.path())
                     )
                 })
@@ -61,7 +61,14 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
                 );
                 return None;
             }
+
             let path = entry.path();
+
+            if path.extension().and_then(|ext| ext.to_str()) != Some("meta") {
+                // Not a meta file, don't care
+                return None;
+            }
+
             let Some(id) = path
                 .file_stem()
                 .and_then(|stem| stem.to_str())
@@ -73,11 +80,6 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
                 );
                 return None;
             };
-
-            if path.extension().and_then(|ext| ext.to_str()) != Some("meta") {
-                // Not a meta file, don't care
-                return None;
-            }
 
             CacheEntry::from_file(path)
                 .map_err(|e| error!("Could not load cache for id: '{id}' due to: {e}"))

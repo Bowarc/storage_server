@@ -4,38 +4,14 @@
 pub struct CacheEntry {
     uuid: uuid::Uuid,
     upload_info: super::UploadInfo,
-    is_ready: std::sync::atomic::AtomicBool,
     size: super::Size,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    file_lock: std::sync::Arc<parking_lot::RwLock<()>>,
 }
 
 // Getters / Setters, easier to read if they are separated
 impl CacheEntry {
-    // pub fn build_metadata(&self) -> super::Metadata {
-    //     super::Metadata::new(
-    //         self.upload_info.name().clone(),
-    //         self.upload_info.extension().clone(),
-    //         self.size,
-    //     )
-    // }
-    pub fn upload_info(&self) -> &super::UploadInfo {
-        &self.upload_info
-    }
-
-    pub fn is_ready(&self) -> bool {
-        self.is_ready.load(std::sync::atomic::Ordering::Acquire)
-    }
-    pub fn set_ready(&self, ready: bool) {
-        self.is_ready
-            .store(ready, std::sync::atomic::Ordering::Release);
-    }
-
-    pub fn data_size(&self) -> &super::Size {
-        &self.size
-    }
-    pub fn set_data_size(&mut self, size: super::Size) {
-        self.size = size;
-    }
-
     pub fn uuid(&self) -> uuid::Uuid {
         self.uuid
     }
@@ -43,26 +19,15 @@ impl CacheEntry {
 
 // Init methods
 impl CacheEntry {
-    pub fn from_metadata(uuid: uuid::Uuid, metadata: super::Metadata, ready: bool) -> Self {
-        use std::sync::atomic::AtomicBool;
-        Self {
-            uuid,
-            upload_info: super::UploadInfo::new(
-                metadata.name().clone(),
-                metadata.extension().clone(),
-            ),
-            is_ready: AtomicBool::new(ready),
-            size: *metadata.size(),
-        }
-    }
-
     pub fn from_file(path: std::path::PathBuf) -> Result<Self, crate::error::CacheError> {
         use {
             super::Metadata,
             crate::error::CacheError,
             rocket::serde::json::serde_json,
-            std::fs::{File, OpenOptions},
-            std::str::FromStr as _,
+            std::{
+                fs::{File, OpenOptions},
+                str::FromStr as _,
+            },
             uuid::Uuid,
         };
 
@@ -101,7 +66,16 @@ impl CacheEntry {
             }
         })?;
 
-        Ok(Self::from_metadata(uuid, metadata, true))
+        Ok(Self {
+            uuid,
+            upload_info: super::UploadInfo::new(
+                metadata.name().clone(),
+                metadata.extension().clone(),
+            ),
+            size: *metadata.size(),
+
+            file_lock: Default::default(),
+        })
     }
 }
 
@@ -133,7 +107,7 @@ impl CacheEntry {
         use {
             crate::error::CacheError,
             rocket::{data::ByteUnit, serde::json::serde_json, tokio::fs::remove_file},
-            std::sync::atomic::AtomicBool,
+            std::path::PathBuf,
         };
 
         let start_time = std::time::Instant::now();
@@ -141,7 +115,20 @@ impl CacheEntry {
         let meta_path = super::fs::meta_path(&uuid);
         // Data path needs to be mutable since since it may be swapped for an already exising file
         // in the duplicate detection
+        // Could also return a new one but eh
         let mut data_path = super::fs::temp_data_path(&uuid);
+
+        let cleanup_files = |meta_path: PathBuf, data_path: PathBuf| async {
+            match futures::join!(remove_file(meta_path), remove_file(data_path)) {
+                (Ok(_), Err(e)) | (Err(e), Ok(_)) => {
+                    error!("[{uuid}] Failed to cleanup after error due to: {e}")
+                }
+                (Err(e1), Err(e2)) => {
+                    error!("[{uuid}] Failed to cleanup after error due to: {e1} AND {e2}")
+                }
+                _ => (),
+            }
+        };
 
         // Create files
         let (meta_file, mut data_file) =
@@ -160,11 +147,8 @@ impl CacheEntry {
                 Ok(size) => size,
                 Err(e) => {
                     // Cleanup the files if we encounter any error
-                    // FIXME: Also remove the meta file
                     // We know that the files were created, so any error here are important
-                    if let Err(e) = remove_file(data_path).await {
-                        error!("[{uuid}] Failed to cleanup data file after error due to: {e}");
-                    }
+                    cleanup_files(meta_path, data_path).await;
                     return Err(e);
                 }
             }
@@ -172,10 +156,14 @@ impl CacheEntry {
 
         // Make sure the file is not a duplicate, in what case we'll remove the data file we just created
         // and use the exising one
-        // FIXME: Error handling
-        super::duplicates::handle_duplicates(&mut data_path, &uuid, &duplicate_map)
-            .await
-            .unwrap();
+        // FIXME: The implementation of this is really ugly
+        if let Err(e) =
+            super::duplicates::handle_duplicates(&mut data_path, &uuid, &duplicate_map).await
+        {
+            cleanup_files(meta_path, data_path).await;
+
+            return Err(e);
+        }
 
         // Build new metadata
         let metadata = super::Metadata::new(
@@ -191,16 +179,7 @@ impl CacheEntry {
 
         // Store that newly built metadata
         if let Err(e) = serde_json::to_writer(meta_file, &metadata) {
-            // FIXME: This could be it's own closure, since it may need to be used above
-            match futures::join!(remove_file(meta_path), remove_file(data_path)) {
-                (Ok(_), Err(e)) | (Err(e), Ok(_)) => {
-                    error!("[{uuid}] Failed to cleanup after error due to: {e}")
-                }
-                (Err(e1), Err(e2)) => {
-                    error!("[{uuid}] Failed to cleanup after error due to: {e1} AND {e2}")
-                }
-                _ => (),
-            }
+            cleanup_files(meta_path, data_path).await;
             return Err(CacheError::Serialization {
                 context: String::from("writing meta data"),
                 why: e,
@@ -217,8 +196,9 @@ impl CacheEntry {
         Ok(Self {
             uuid,
             upload_info,
-            is_ready: AtomicBool::new(true),
             size: data_size,
+
+            file_lock: Default::default(),
         })
     }
 
@@ -228,22 +208,27 @@ impl CacheEntry {
     ) -> Result<(super::UploadInfo, Box<dyn std::io::Read + Send>), crate::error::CacheError> {
         use {crate::error::CacheError, std::fs::OpenOptions, zstd::stream::Decoder};
 
-        // FIXME
-        //
-        // Here, I would like to add some kind of lock to make sure a file currently
-        // Being read is not deleted, but I don't actually know how to do it.
-        //
-        // Since we give back a decoder, using some kind of lock in this method wouldn't work
-        // as the decoder lives longer than the method.
-        //
-        // Maybe some wrapper over the decoder with a lock guard given to it ?
-
-        // Load and decompress the given cache self
-        let uuid = self.uuid();
-
-        if !self.is_ready() {
-            return Err(CacheError::NotReady { uuid });
+        struct DecoderWrapper<'t, T, U> {
+            decoder: zstd::stream::Decoder<'t, T>,
+            _file_lock: U,
         }
+
+        impl<'t, T, U> std::io::Read for DecoderWrapper<'t, T, U>
+        where
+            T: std::io::Read + Send + std::io::BufRead,
+        {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.decoder.read(buf)
+            }
+        }
+
+        let (lock, duration) = time::timeit(|| self.file_lock.read_arc());
+
+        debug!(
+            "Download of cache {}, acquired lock in {}",
+            self.uuid,
+            time::format(duration, 1)
+        );
 
         let metadata = self.load_meta()?;
 
@@ -264,7 +249,13 @@ impl CacheEntry {
             })?
         };
 
-        Ok((self.upload_info.clone(), Box::new(decoder)))
+        Ok((
+            self.upload_info.clone(),
+            Box::new(DecoderWrapper {
+                decoder,
+                _file_lock: lock,
+            }),
+        ))
     }
 
     /// Delete a cache entry
@@ -272,9 +263,21 @@ impl CacheEntry {
         &self,
         duplicate_map: std::sync::Arc<rocket::tokio::sync::Mutex<super::DuplicateMap>>,
     ) -> Result<(), crate::error::CacheError> {
+        // #![allow(clippy::await_holding_lock)]
+        // This was for the file_lock but it's fixed using the arc guard
+
         use {crate::error::CacheError, tokio::fs::remove_file};
 
-        self.set_ready(false);
+        let (lock, duration) = time::timeit(|| self.file_lock.write_arc());
+
+        debug!(
+            "Deletion of cache {}, acquired lock in {}",
+            self.uuid,
+            time::format(duration, 1)
+        );
+
+        // warn!("Tried to delete a file currently accessed !\n{:?}", self.file_lock.read());
+        // return Err(CacheError::NotReady { uuid: self.uuid });
 
         let metadata = self.load_meta()?;
 
@@ -299,14 +302,13 @@ impl CacheEntry {
                     file: meta_path.display().to_string(),
                     why: e,
                 })?;
-
             return Ok(());
         }
 
+        let meta_path = super::fs::meta_path(&self.uuid);
         let data_path = super::fs::data_path(metadata.data_file_name());
 
-        let meta_path = super::fs::meta_path(&self.uuid);
-        match futures::join!(remove_file(&meta_path), remove_file(&data_path)) {
+        let res = match futures::join!(remove_file(&meta_path), remove_file(&data_path)) {
             (Ok(_), Ok(_)) => Ok(()),
             (Ok(_), Err(e)) => Err(CacheError::FileRemove {
                 file: data_path.display().to_string(),
@@ -326,6 +328,11 @@ impl CacheEntry {
                     why: e2,
                 },
             ])),
-        }
+        };
+
+        // Make sure the lock is kept and not optimized out by the compiler
+        drop(lock);
+
+        res
     }
 }

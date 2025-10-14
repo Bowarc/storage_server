@@ -19,7 +19,7 @@ pub async fn api_delete(
     c_type: Option<&rocket::http::ContentType>,
 ) -> crate::response::Response {
     use crate::response::Response;
-    use rocket::http::Status;
+    use rocket::http::{ContentType, Status};
 
     // wrong route
     let Some(uuidw) = uuidw else {
@@ -46,17 +46,28 @@ pub async fn api_delete(
     // Shouldn't fail as the cache is locked and we just retrieved the index
     let entry = cache_lock.remove(index); // <!> Implicit panic
 
+    // Don't hold the lock as it blocks **every** other entries
+    drop(cache_lock);
+
     if let Err(e) = entry.delete(std::sync::Arc::clone(duplicate_map)).await {
         error!("Failed to delete {uuid} due to: {e}");
 
+        cache.write().await.push(entry);
+
         return Response::builder()
             .with_status(Status::InternalServerError)
+            .with_content_type(ContentType::Text)
+            .with_content(format!("Failed to delete {uuid}"))
             .build();
     };
 
     debug!("Successfully deleted {uuid}");
 
-    Response::builder().build()
+    Response::builder()
+        .with_status(Status::NoContent)
+        .with_content_type(ContentType::Text)
+        .with_content(format!("{uuid} has been successfully deleted"))
+        .build()
 }
 
 #[cfg(test)]
@@ -93,8 +104,6 @@ mod tests {
 
             let rs = response.into_string().await.unwrap();
 
-            info!("{}", rs);
-
             let suuid = rs.replace("Success: ", "");
             uuid::Uuid::from_str(&suuid).unwrap()
         };
@@ -105,6 +114,6 @@ mod tests {
             .dispatch()
             .await;
 
-        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.status(), Status::NoContent);
     }
 }
