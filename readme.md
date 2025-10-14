@@ -28,8 +28,8 @@ The goal of this project is to make a db-like local storage system for files.
     - [x] Streaming upload, download and compression
     - [x] Integration with curl [#6](https://github.com/Bowarc/storage_server/issues/6)
     - [x] Simple download link [#7](https://github.com/Bowarc/storage_server/issues/7)
-    - [x] A way to not store duplicates using hash-based duplicate detection
-            The implementation isn't the prettyest not the safest but it works
+    - [x] A way to not store duplicates using hash-based duplicate detection  
+            The implementation isn't the prettyest nor the safest but it works  
             (I'll rework it soon™)
     - [x] A way to delete a stored file (see [#3](https://github.com/Bowarc/storage_server/issues/3))
 - [x] WASM front end
@@ -120,3 +120,4 @@ curl http://<YOUR_ADDRESS:YOUR_PORT>/<UUID> -X DELETE
 > **_NOTE:_** On browser you only need the UUID as it auto redirects to the right file name  
 (```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>``` -> ```http://<YOUR_ADDRESS:YOUR_PORT>/<UUID>/file.ext```).  
     Take a look at [#7](https://github.com/Bowarc/storage_server/issues/7) for more informations.
+
