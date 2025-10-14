@@ -1,5 +1,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
+    #[error("Could not read directory '{dir}' due to: {why}")]
+    CacheDirRead { dir: String, why: std::io::Error },
+
     #[error("Could not create file '{file}' due to: {why}")]
     FileCreate { file: String, why: std::io::Error },
 
@@ -14,7 +17,7 @@ pub enum CacheError {
 
     #[error("Could not remove to file '{file}' due to: {why}")]
     FileRemove { file: String, why: std::io::Error },
-    
+
     #[error("Could not rename to file '{file}' due to: {why}")]
     FileRename { file: String, why: std::io::Error },
 
@@ -54,7 +57,7 @@ pub enum CacheError {
     #[error("Multiple errors occured: {0:?}")]
     Multiple(Vec<Self>),
 
-    #[error("There has been an issue with the duplicate map: {0}")]
+    #[error("Duplicate map issue: {0}")]
     DuplicateMapLogic(String),
 }
 

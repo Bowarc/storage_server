@@ -52,24 +52,26 @@ pub async fn api_upload(
     // File size check are done in the store data function in cache.rs
     let data_stream = raw_data.open(ByteUnit::max_value());
 
-    let mut entry = CacheEntry::new(
+    let entry = match CacheEntry::store_new(
         uuid,
         crate::cache::UploadInfo::new(
             get_file_name(filename).unwrap_or_default(),
             get_file_extension(filename).unwrap_or_default(),
         ),
-    );
-
-    if let Err(e) = entry
-        .store(data_stream, std::sync::Arc::clone(duplicate_map))
-        .await
+        data_stream,
+        std::sync::Arc::clone(duplicate_map),
+    )
+    .await
     {
-        error!("[{uuid}] An error occured while storing the given data: {e}");
-        return Response::builder()
-            .with_status(Status::InternalServerError)
-            .with_content("An error occured while caching the data")
-            .with_content_type(ContentType::Text)
-            .build();
+        Ok(entry) => entry,
+        Err(e) => {
+            error!("[{uuid}] An error occured while storing the given data: {e}");
+            return Response::builder()
+                .with_status(Status::InternalServerError)
+                .with_content("An error occured while caching the data")
+                .with_content_type(ContentType::Text)
+                .build();
+        }
     };
 
     cache.write().await.push(Arc::new(entry));

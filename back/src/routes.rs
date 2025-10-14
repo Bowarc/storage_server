@@ -16,9 +16,9 @@ pub use info_route::*;
 #[allow(unused_imports)] // Used by main.rs
 pub use upload_route::*;
 
-// Here are routes that are managed by the front end router, so just serve the page and let it do it's things
+// Here are routes that are managed by the front end router, so just serve the page and let it do its things
 macro_rules! front_route {
-    // here i could match on list of tokens with $($path:..)
+    // Here I could match on list of tokens with $($path:..)
     // But I prefer keeping things simple
     ($name:ident, $path:literal) => {
         #[rocket::get($path)]
@@ -68,7 +68,8 @@ pub async fn favicon_ico(ip_addr: rocket_client_addr::ClientAddr) -> super::resp
     static_file_response("favicon.ico", ContentType::Icon, ip_addr, true).await
 }
 
-// The goal of this method, is to not use FileServer (because i wanna make sure of what file i serve)
+// The goal of this method is to not use rocket's FileServer
+// because I wanna make sure of what file I allow serving
 macro_rules! static_dir_server {
     ($path:literal, $dir:literal, $func_name:ident, $allowed_files:expr) => {
         #[rocket::get($path)]
@@ -119,6 +120,8 @@ static_dir_server!(
     ]
 );
 
+// Serve a static file
+// This assumes that the file is allowed to be served
 pub async fn serve_static(
     path: &str,
     file: &str,
@@ -138,6 +141,7 @@ pub async fn serve_static(
         Some(&file_name[(dot_index + 1)..file_name.len()])
     }
 
+    // Try to build content type using the file extension
     let content_type = ext(file)
         .and_then(ContentType::from_extension)
         .unwrap_or_else(|| {
@@ -145,6 +149,7 @@ pub async fn serve_static(
             ContentType::Any
         });
 
+    // Serve local file
     static_file_response(&format!("{path}/{file}"), content_type, ip_addr, cache).await
 }
 

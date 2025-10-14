@@ -14,7 +14,10 @@ mod error;
 mod response;
 mod routes;
 
+// SAFETY:
+//     This static is ONLY EVER mutated at the program's init, before the webserer is even running
 static mut FILE_REQ_SIZE_LIMIT: rocket::data::ByteUnit = rocket::data::ByteUnit::Byte(0);
+
 // Needed for tests
 pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     let Some(cache) = cache::init_cache_list_from_cache_dir() else {

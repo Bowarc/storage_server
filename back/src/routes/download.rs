@@ -8,6 +8,8 @@ lazy_static! {
 
 pub struct UuidWrapper(uuid::Uuid);
 
+// uuid::Uuid does not implement rocket::request::FromParam, so I made a simple wrapper.
+// Maybe shouldn't be there though
 impl<'p> rocket::request::FromParam<'p> for UuidWrapper {
     type Error = crate::error::UuidParseError;
 
@@ -47,15 +49,15 @@ pub async fn api_download(
 
     // About the optional uuidw and the ugly ton of params:
     //  The routing system in rocket works a bit weirdly, since you can only have 1
-    //  wilcard per route level (you can't have two routes that have "/<something>" refering to two different types)
+    //  wildcard per route level (you can't have two routes that have "/<something>" refering to two different types)
     //
     //  This, coupled with the fact that forcing a route to comform to a type, makes an useless warn! log when
-    //  it doesn't match, makes it so i have to do the error part of the routing myself
+    //  it doesn't match, makes it so I have to do the error part of the routing myself
     //
     //  So.. we have this monstruosity, where I need to query the error log infos with the happy path
     //  (and make my 404 route a two function thing)
     //
-    //  this also have the effect to move the path to uuid conversion to the fromparam trait
+    //  this also have the effect to move the path to uuid conversion to the FromParam trait
     addr: rocket_client_addr::ClientAddr,
     method: rocket::http::Method,
     uri: &rocket::http::uri::Origin<'_>,
@@ -95,7 +97,7 @@ pub async fn api_download(
             .build();
     };
 
-    let (meta, data_stream) = match cache_entry.load() {
+    let (meta, data_stream) = match cache_entry.load().await {
         Ok(meta_data) => meta_data,
         Err(CacheError::NotReady { uuid }) => {
             error!("[{uuid}] The requested cache is not ready yet");
@@ -146,10 +148,7 @@ pub async fn api_download(
             // ie: An uploaded file named 'Hellow' would be sent back as 'Hellow.'
             // Caught by unit tests, but damn what a dumb mistake
             &if meta.extension().is_empty() {
-                format!(
-                    "attachment; filename=\"{}\"",
-                    meta.name(),
-                )
+                format!("attachment; filename=\"{}\"", meta.name(),)
             } else {
                 format!(
                     "attachment; filename=\"{}.{}\"",
@@ -251,7 +250,7 @@ mod tests {
     #[rocket::async_test]
     async fn test_download() {
         use rocket::http::Header;
-        let base_filename = "eh";
+        let base_filename = "Test";
 
         let client = Client::tracked(build_rocket().await)
             .await

@@ -15,6 +15,7 @@
 
 mod duplicates;
 mod entry;
+mod fs;
 mod metadata;
 mod size;
 mod upload_info;
@@ -25,31 +26,17 @@ pub use metadata::Metadata;
 pub use size::Size;
 pub use upload_info::UploadInfo;
 
-// const CACHE_DIRECTORY: &std::path::PathBuf = "./cache";
-#[cfg(not(test))]
-lazy_static! {
-    static ref CACHE_DIRECTORY: std::path::PathBuf =
-        std::str::FromStr::from_str("./cache").unwrap();
-}
-#[cfg(test)]
-lazy_static! {
-    static ref CACHE_DIRECTORY: std::path::PathBuf =
-        std::str::FromStr::from_str("../cache").unwrap();
-}
-
 const COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL; // 3, 1..=22 (zstd)
 
 pub type CacheEntryList = Vec<std::sync::Arc<CacheEntry>>;
 
 pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
     use {
-        std::{fs::read_dir, path::PathBuf, str::FromStr as _, sync::Arc},
+        std::{path::PathBuf, str::FromStr as _, sync::Arc},
         uuid::Uuid,
     };
 
-    let files = read_dir(CACHE_DIRECTORY.clone())
-        .map_err(|e| error!("Could not open cache dir due to: {e}"))
-        .ok()?;
+    let files = fs::read_cache_dir().ok()?;
 
     // The default one is bad
     let display_path = |path: PathBuf| -> String { path.display().to_string().replace("\\", "/") };
@@ -86,15 +73,8 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
                 );
                 return None;
             };
-            let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-                warn!(
-                    "Could not extract extension from cache file '{}'",
-                    display_path(path)
-                );
-                return None;
-            };
 
-            if ext != "meta" {
+            if path.extension().and_then(|ext| ext.to_str()) != Some("meta") {
                 // Not a meta file, don't care
                 return None;
             }
@@ -111,61 +91,9 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
     Some(inner)
 }
 
-fn meta_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
-    let mut p = CACHE_DIRECTORY.clone();
-    p.push(format!("{}.meta", uuid.as_hyphenated()));
-    p
-}
-
-fn temp_data_path(uuid: &uuid::Uuid) -> std::path::PathBuf {
-    let mut p = CACHE_DIRECTORY.clone();
-    p.push(format!("{}.temp_data", uuid.as_hyphenated()));
-    p
-}
-
-// This tries to create the .meta and .data files
-// If it fails to create one of the two, it deletes the one created
-fn create_cache_files(
-    meta_path: std::path::PathBuf,
-    data_path: std::path::PathBuf,
-) -> Result<(std::fs::File, std::fs::File), crate::error::CacheError> {
-    use {
-        crate::error::CacheError,
-        std::fs::{remove_file, OpenOptions},
-    };
-
-    let meta_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&meta_path)
-        .map_err(|e| CacheError::FileCreate {
-            file: meta_path.display().to_string(),
-            why: e,
-        })?;
-
-    let data_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&data_path)
-        .map_err(|e| {
-            if let Err(remove_e) = remove_file(&meta_path) {
-                return CacheError::FileRemove {
-                    file: meta_path.display().to_string(),
-                    why: remove_e,
-                };
-            }
-
-            CacheError::FileCreate {
-                file: data_path.display().to_string(),
-                why: e,
-            }
-        })?;
-
-    Ok((meta_file, data_file))
-}
-
-// Returns the file size before compression
-async fn store_data(
+/// Takes an incomming data stream, compresses and stores it in a given 'data' file.
+/// Returns the file size before compression and the resulting file size
+async fn stream_to_file(
     uuid: &uuid::Uuid,
     mut original_data: rocket::data::DataStream<'_>,
     data_file: &mut std::fs::File,
@@ -189,7 +117,11 @@ async fn store_data(
     #[rustfmt::skip]
     let mut buffer = vec![0; BUFFER_SIZE];
 
-    let byte_size_limit: ByteUnit = unsafe { crate::FILE_REQ_SIZE_LIMIT.bytes() };
+    let byte_size_limit: ByteUnit = unsafe {
+        // SAFETY:
+        //     This static is ONLY EVER mutated at the program's init, before the webserer is even running
+        crate::FILE_REQ_SIZE_LIMIT.bytes()
+    };
 
     let mut total_read = 0;
     loop {
@@ -218,19 +150,25 @@ async fn store_data(
         .finish()
         .map_err(|e| CacheError::Compression { why: e })?;
 
-    let metadata = data_file.metadata().map_err(|e| CacheError::FileRead {
-        file: format!("(data file for uuid ({uuid})"),
-        why: e,
-    })?;
+    // This is a bit ugly, but since `decoder.finish()` also writes things to the file
+    // using the total written bytes count as 'total file size' yields incorrect results.
+    // Since I don't know how to predict how many more bytes are written in that `encoder.finish()`
+    // I directly use the file metadata.
+    let file_size = {
+        let metadata = data_file.metadata().map_err(|e| CacheError::FileRead {
+            file: format!("(data file for uuid ({uuid})"),
+            why: e,
+        })?;
 
-    let file_size = metadata.len();
+        metadata.len()
+    };
 
     debug!(
         "totals:\nRead: {}\nWrote: {}\nDelta: {}%",
         total_read,
         file_size,
         {
-            let d = -(100. - (file_size as f64 / total_read as f64) * 100.);
+            let d = -100. * (1. - (file_size as f64 / total_read as f64));
             if d > 0. {
                 format!("+{d:.3}")
             } else {
@@ -239,193 +177,5 @@ async fn store_data(
         }
     );
 
-    // Ok(total_read as u64)
     Ok(Size::new(total_read as u64, file_size))
-}
-
-async fn store_meta(
-    uuid: &uuid::Uuid,
-    metadata: Metadata,
-    meta_file: &mut std::fs::File,
-) -> Result<(), crate::error::CacheError> {
-    use {crate::error::CacheError, rocket::serde::json::serde_json, std::io::Write as _};
-
-    let meta = serde_json::to_string(&metadata).map_err(|e| CacheError::Serialization {
-        context: String::from("writing meta data"),
-        why: e,
-    })?;
-
-    // let meta = ; // Cannot inline with the above due to lifetime issues
-
-    if let Err(e) = meta_file.write_all(meta.as_bytes()) {
-        return Err(CacheError::FileWrite {
-            file: format!("(meta file for uuid ({uuid}))"),
-            why: e,
-        });
-    }
-
-    Ok(())
-}
-
-/// This function moves or remove the data file depending on if it already exists
-// Can't do it in store_data since we only have access to the original bytes
-// which is pre compression, so much more than if we read after
-async fn handle_duplicates(
-    data_file_path: &mut std::path::PathBuf,
-    uuid: &uuid::Uuid,
-    duplicate_map: &std::sync::Arc<rocket::tokio::sync::Mutex<DuplicateMap>>,
-) -> Result<(), crate::error::CacheError> {
-    use {
-        crate::error::CacheError,
-        rocket::tokio::{
-            fs::{remove_file, rename},
-            sync::Mutex,
-        },
-        std::sync::LazyLock,
-    };
-    let (r, duration) = time::timeit_async(async || hash_file(data_file_path.clone()).await).await;
-    debug!("Hash: {:?} in {}", r, time::format(duration, -1));
-    let hash = r?;
-
-    // Quick and dirty way to avoid all possibilities of data races on file moves
-    static MUTEX: LazyLock<Mutex<()>> = LazyLock::new(Mutex::default);
-
-    let guard = MUTEX.lock().await;
-
-    let is_duplicate = {
-        let mut duplicate_map_handle = duplicate_map.lock().await;
-
-        duplicate_map_handle.add(hash.clone(), *uuid)?;
-
-        // Get corresponding uuid list from hash
-        let is_dup = duplicate_map_handle
-            .get(&hash)
-            .map(|uuid_list| uuid_list.len() > 1);
-
-        // The hash should be registered since the minimum element list would be the current download
-        if is_dup.is_none() {
-            duplicate_map_handle.add(hash.clone(), *uuid)?
-        }
-        
-        is_dup.unwrap_or(false)
-    };
-
-    let new_dp = {
-        let mut p = CACHE_DIRECTORY.clone();
-        p.push(hash.clone());
-        p
-    };
-
-    if is_duplicate {
-        remove_file(data_file_path.clone())
-            .await
-            .map_err(|e| CacheError::FileRemove {
-                file: data_file_path.display().to_string(),
-                why: e,
-            })?;
-    } else {
-        rename(data_file_path.clone(), new_dp.clone())
-            .await
-            .map_err(|e| CacheError::FileRename {
-                file: data_file_path.display().to_string(),
-                why: e,
-            })?;
-    }
-
-    *data_file_path = new_dp;
-
-    drop(guard);
-
-    Ok(())
-}
-
-async fn hash_file<P: AsRef<std::path::Path>>(path: P) -> Result<String, crate::error::CacheError> {
-    use {
-        crate::error::CacheError,
-        rocket::tokio::{fs::File, io::AsyncReadExt as _},
-        sha2::{Digest as _, Sha256},
-    };
-
-    let path = path.as_ref();
-
-    let mut file = File::open(path).await.map_err(|e| CacheError::FileOpen {
-        file: path.display().to_string(),
-        why: e,
-    })?;
-
-    let mut hasher = Sha256::default();
-    let mut buffer = [0; 8192];
-
-    while let Ok(bytes_read) = file.read(&mut buffer).await {
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-async fn store(
-    entry: &mut CacheEntry,
-    original_data_stream: rocket::data::DataStream<'_>,
-    duplicate_map: std::sync::Arc<rocket::tokio::sync::Mutex<DuplicateMap>>,
-) -> Result<Size, crate::error::CacheError> {
-    use tokio::fs::remove_file;
-
-    let uuid = entry.uuid();
-
-    let meta_path = meta_path(&uuid);
-    let mut data_path = temp_data_path(&uuid);
-
-    let (mut meta_file, mut data_file) = create_cache_files(meta_path.clone(), data_path.clone())?;
-
-    let (data_store_result, data_store_duration) =
-        time::timeit_async(async || store_data(&uuid, original_data_stream, &mut data_file).await)
-            .await;
-
-    debug!("Data store took: {}", time::format(data_store_duration, -1));
-
-    let data_size = match data_store_result {
-        Ok(size) => size,
-        Err(e) => {
-            // We know that the files were created, so any error here are important
-            if let Err(e) = remove_file(data_path).await {
-                error!("[{uuid}] Failed to cleanup data file after error due to: {e}");
-            }
-            return Err(e);
-        }
-    };
-
-    entry.set_data_size(data_size);
-
-    handle_duplicates(&mut data_path, &uuid, &duplicate_map).await;
-
-    let metadata = Metadata::new(
-        entry.upload_info().name().to_string(),
-        entry.upload_info().extension().to_string(),
-        *entry.data_size(),
-        data_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("{uuid}.data")),
-    );
-
-    if let Err(e) = store_meta(&uuid, metadata, &mut meta_file).await {
-        match futures::join!(remove_file(meta_path), remove_file(data_path)) {
-            (Ok(_), Err(e)) | (Err(e), Ok(_)) => {
-                error!("[{uuid}] Failed to cleanup after error due to: {e}")
-            }
-            (Err(e1), Err(e2)) => {
-                error!("[{uuid}] Failed to cleanup after error due to: {e1} AND {e2}")
-            }
-            _ => (),
-        }
-        return Err(e);
-    }
-
-    entry.set_ready(true);
-
-    Ok(data_size)
 }
