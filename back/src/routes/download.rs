@@ -171,7 +171,7 @@ pub async fn api_download(
 ///
 #[rocket::get("/<uuidw>/<filename>")]
 pub async fn api_download_filename(
-    uuidw: UuidWrapper,
+    uuidw: Option<UuidWrapper>,
     filename: &str,
     cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
     client_addr: rocket_client_addr::ClientAddr,
@@ -184,6 +184,13 @@ pub async fn api_download_filename(
     use {
         crate::response::ResponseBuilder,
         rocket::http::{ContentType, Status},
+    };
+
+    let Some(uuidw) = uuidw else {
+        let addr_string = client_addr
+            .get_ipv4_string()
+            .unwrap_or_else(|| client_addr.get_ipv6_string());
+        return crate::catchers::inner_404(addr_string, method, uri, c_type).await;
     };
 
     let resp = api_download(Some(uuidw), cache, client_addr, method, uri, c_type).await;
