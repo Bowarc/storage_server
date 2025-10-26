@@ -28,9 +28,9 @@ pub use upload_info::UploadInfo;
 
 const COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL; // 3, 1..=22 (zstd)
 
-pub type CacheEntryList = Vec<std::sync::Arc<CacheEntry>>;
+pub type CacheEntryMap = dashmap::DashMap<uuid::Uuid, CacheEntry>;
 
-pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
+pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryMap> {
     use {
         std::{path::PathBuf, str::FromStr as _, sync::Arc},
         uuid::Uuid,
@@ -81,12 +81,14 @@ pub fn init_cache_list_from_cache_dir() -> Option<CacheEntryList> {
                 return None;
             };
 
-            CacheEntry::from_file(path)
+            let entry = CacheEntry::from_file(path)
                 .map_err(|e| error!("Could not load cache for id: '{id}' due to: {e}"))
                 .map(Arc::new)
-                .ok()
+                .ok()?;
+
+            Some((entry.uuid(), std::sync::Arc::into_inner(entry).unwrap()))
         })
-        .collect::<Vec<Arc<CacheEntry>>>();
+        .collect::<dashmap::DashMap<uuid::Uuid, CacheEntry>>();
 
     debug!("Loaded {} cache entries", inner.len());
 

@@ -28,7 +28,7 @@ pub async fn build_rocket() -> rocket::Rocket<rocket::Ignite> {
     let duplicate_map = cache::DuplicateMap::init_from_cache_dir();
 
     let rocket = rocket::build()
-        .manage(rocket::tokio::sync::RwLock::new(cache))
+        .manage(cache)
         .manage(std::sync::Arc::new(rocket::tokio::sync::Mutex::new(
             duplicate_map,
         )))

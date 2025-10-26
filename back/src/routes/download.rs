@@ -45,7 +45,7 @@ impl std::ops::Deref for UuidWrapper {
 #[rocket::get("/<uuidw>")]
 pub async fn api_download(
     uuidw: Option<UuidWrapper>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    cache: &rocket::State<crate::cache::CacheEntryMap>,
 
     // About the optional uuidw and the ugly ton of params:
     //  The routing system in rocket works a bit weirdly, since you can only have 1
@@ -80,15 +80,9 @@ pub async fn api_download(
 
     let uuid = *uuidw;
 
-    info!("[{addr}] DOWNLOAD request of {uuid}",);
+    info!("[{addr}] DOWNLOAD request of {uuid}");
 
-    let Some(cache_entry) = cache
-        .read()
-        .await
-        .iter()
-        .find(|entry| entry.uuid() == uuid)
-        .cloned()
-    else {
+    let Some(cache_entry) = cache.get(&uuid) else {
         error!("[{uuid}] The given uuid doesn't correspnd to any cache entry");
         return ResponseBuilder::default()
             .with_status(Status::NotFound)
@@ -99,14 +93,14 @@ pub async fn api_download(
 
     let (meta, data_stream) = match cache_entry.load().await {
         Ok(meta_data) => meta_data,
-        Err(CacheError::NotReady { uuid }) => {
-            error!("[{uuid}] The requested cache is not ready yet");
-            return ResponseBuilder::default()
-                .with_status(Status::NotFound)
-                .with_content("The requested cache is not ready yet")
-                .with_content_type(ContentType::Text)
-                .build();
-        }
+        // Err(CacheError::NotReady { uuid }) => {
+        //     error!("[{uuid}] The requested cache is not ready yet");
+        //     return ResponseBuilder::default()
+        //         .with_status(Status::NotFound)
+        //         .with_content("The requested cache is not ready yet")
+        //         .with_content_type(ContentType::Text)
+        //         .build();
+        // }
         Err(CacheError::FileOpen { file, why }) => {
             error!("[{uuid}] Failled to open data file ({file}) due to: {why}");
             return ResponseBuilder::default()
@@ -173,7 +167,7 @@ pub async fn api_download(
 pub async fn api_download_filename(
     uuidw: Option<UuidWrapper>,
     filename: &str,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    cache: &rocket::State<crate::cache::CacheEntryMap>,
     client_addr: rocket_client_addr::ClientAddr,
 
     // Ewww

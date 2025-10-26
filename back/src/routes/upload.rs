@@ -13,7 +13,7 @@ lazy_static! {
 pub async fn api_upload(
     filename: &str,
     raw_data: rocket::data::Data<'_>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    cache: &rocket::State<crate::cache::CacheEntryMap>,
     duplicate_map: &rocket::State<
         std::sync::Arc<rocket::tokio::sync::Mutex<crate::cache::DuplicateMap>>,
     >,
@@ -25,14 +25,18 @@ pub async fn api_upload(
             data::ByteUnit,
             http::{ContentType, Status},
         },
-        std::{sync::Arc, time::Instant},
+        std::time::Instant,
         uuid::Uuid,
     };
 
     let start_timer = Instant::now();
 
-    let uuid = Uuid::new_v4();
-    // let wait_store = true; // Probably better to make this an endpoint like /api/upload/ and /api/upload/awaited/;
+    let uuid = loop {
+        let uuid = Uuid::new_v4();
+        if cache.get(&uuid).is_none() {
+            break uuid;
+        }
+    };
 
     debug!(
         "Received new upload request from {addr}\nUsing id: {uuid}\nUsername: {}\nFile name: {}",
@@ -74,7 +78,12 @@ pub async fn api_upload(
         }
     };
 
-    cache.write().await.push(Arc::new(entry));
+    let x = cache.insert(entry.uuid(), entry);
+    if x.is_some() {
+        for _ in 0..10 {
+            error!("uuid conflict please fix: {uuid}");
+        }
+    }
 
     info!(
         "[{uuid}] Responded in {}",

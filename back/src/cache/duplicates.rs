@@ -3,6 +3,7 @@ type Hash = String;
 
 #[derive(Debug, Default)]
 pub struct DuplicateMap {
+    // hashbrown could be used here
     inner: std::collections::HashMap<Hash, Vec<uuid::Uuid>>,
 }
 

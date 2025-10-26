@@ -27,14 +27,14 @@ pub enum CacheError {
     #[error("Could not compress the given data due to {why}")]
     Compression { why: std::io::Error },
 
-    #[error("Could not decompress the given data")]
-    Decompression,
+    // #[error("Could not decompress the given data")]
+    // Decompression,
 
-    #[error("The uuid '{uuid}' doen't correspond to any cache")]
-    NotFound { uuid: uuid::Uuid },
+    // #[error("The uuid '{uuid}' doen't correspond to any cache")]
+    // NotFound { uuid: uuid::Uuid },
 
-    #[error("Cache with uuid: {uuid} isn't ready yet")]
-    NotReady { uuid: uuid::Uuid },
+    // #[error("Cache with uuid: {uuid} isn't ready yet")]
+    // NotReady { uuid: uuid::Uuid },
 
     #[error("Serialization error while {context} due to {why}")]
     Serialization {

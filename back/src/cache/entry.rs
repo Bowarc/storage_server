@@ -6,7 +6,7 @@ pub struct CacheEntry {
     upload_info: super::UploadInfo,
     size: super::Size,
 
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip_serializing)]
     file_lock: std::sync::Arc<parking_lot::RwLock<()>>,
 }
 

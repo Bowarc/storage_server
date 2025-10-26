@@ -7,7 +7,7 @@
 #[rocket::delete("/<uuidw>")]
 pub async fn api_delete(
     uuidw: Option<super::UuidWrapper>,
-    cache: &rocket::State<rocket::tokio::sync::RwLock<crate::cache::CacheEntryList>>,
+    cache: &rocket::State<crate::cache::CacheEntryMap>,
     duplicate_map: &rocket::State<
         std::sync::Arc<rocket::tokio::sync::Mutex<crate::cache::DuplicateMap>>,
     >,
@@ -33,26 +33,17 @@ pub async fn api_delete(
 
     info!("[{addr}] DELETE request of {uuid}");
 
-    // We 100% want to lock it because we don't want to open ourself to any toctou issue
-    let mut cache_lock = cache.write().await;
-
-    let Some(index) = cache_lock.iter().position(|entry| entry.uuid() == uuid) else {
+    let Some((_uuid, entry)) = cache.remove(&uuid) else {
         error!("Could not find entry for {uuid}");
         return Response::builder()
             .with_status(Status::InternalServerError)
             .build();
     };
 
-    // Shouldn't fail as the cache is locked and we just retrieved the index
-    let entry = cache_lock.remove(index); // <!> Implicit panic
-
-    // Don't hold the lock as it blocks **every** other entries
-    drop(cache_lock);
-
     if let Err(e) = entry.delete(std::sync::Arc::clone(duplicate_map)).await {
         error!("Failed to delete {uuid} due to: {e}");
 
-        cache.write().await.push(entry);
+        cache.insert(entry.uuid(), entry);
 
         return Response::builder()
             .with_status(Status::InternalServerError)
