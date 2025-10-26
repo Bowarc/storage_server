@@ -78,11 +78,19 @@ pub async fn api_upload(
         }
     };
 
-    let x = cache.insert(entry.uuid(), entry);
-    if x.is_some() {
-        for _ in 0..10 {
-            error!("uuid conflict please fix: {uuid}");
-        }
+    // This should not be possible / never occur
+    //
+    // This is giga overkill since there is a already a check above and new files
+    // are created with the 'create_new' option, so there is no way two upload conflict without error
+    if let Some(old) = cache.insert(entry.uuid(), entry) {
+        cache.insert(old.uuid(), old); // undo
+        error!("Inserting a new cache returned an old one at uuid: {uuid}");
+
+        return Response::builder()
+            .with_status(Status::InternalServerError)
+            .with_content("An error occured while caching the data")
+            .with_content_type(ContentType::Text)
+            .build();
     }
 
     info!(
