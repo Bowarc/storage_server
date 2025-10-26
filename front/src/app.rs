@@ -42,7 +42,7 @@ pub fn App(props: &Props) -> Html {
     html! {
         <div id="global">
         <div id="header">
-            <a class="header-item" href="http://github.com/Bowarc/wasm_portfolio">
+            <a class="header-item" href="http://github.com/Bowarc/storage_server">
                 <img src="/resources/github.webp" alt="Github icon" class="icon"/>
             </a>
             <LightSwitch />
